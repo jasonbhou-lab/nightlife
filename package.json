@@ -41,7 +41,8 @@
     "db:push": "supabase db push",
     "db:seed": "supabase db query --linked -f supabase/seed.sql",
     "db:types": "supabase gen types typescript --project-id wfrgebdwbddhitjvqrhl > src/lib/database.types.ts",
-    "db:lint": "node scripts/lint-sql.mjs"
+    "db:lint": "node scripts/lint-sql.mjs",
+    "build:web": "expo export --platform web"
   },
   "private": true
 }
