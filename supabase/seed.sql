@@ -176,7 +176,53 @@ insert into venues (
   '{"11":0.5,"12":0.9,"13":0.95,"17":0.6,"18":0.8,"19":0.85,"20":0.6}'::jsonb,
   ARRAY['waitlist', 'bar_hold']::booking_mode[],
   NULL
-),
+)
+on conflict (id) do update set
+  name = excluded.name,
+  alternate_names = excluded.alternate_names,
+  primary_vertical = excluded.primary_vertical,
+  primary_category = excluded.primary_category,
+  secondary = excluded.secondary,
+  price_tier = excluded.price_tier,
+  neighborhood = excluded.neighborhood,
+  address = excluded.address,
+  map_x = excluded.map_x,
+  map_y = excluded.map_y,
+  phone = excluded.phone,
+  website = excluded.website,
+  rating = excluded.rating,
+  review_count = excluded.review_count,
+  claimed = excluded.claimed,
+  verified = excluded.verified,
+  opened_year = excluded.opened_year,
+  closure_state = excluded.closure_state,
+  closure_note = excluded.closure_note,
+  consumer_alert = excluded.consumer_alert,
+  promoted = excluded.promoted,
+  tagline = excluded.tagline,
+  about = excluded.about,
+  attributes = excluded.attributes,
+  attribute_meta = excluded.attribute_meta,
+  default_source = excluded.default_source,
+  default_updated_at = excluded.default_updated_at,
+  schedules = excluded.schedules,
+  happy_hours = excluded.happy_hours,
+  photos = excluded.photos,
+  menus = excluded.menus,
+  qa = excluded.qa,
+  sub_rating_averages = excluded.sub_rating_averages,
+  busyness = excluded.busyness,
+  booking_modes = excluded.booking_modes,
+  booking_terms = excluded.booking_terms;
+
+insert into venues (
+  id, name, alternate_names, primary_vertical, primary_category, secondary,
+  price_tier, neighborhood, address, map_x, map_y, phone, website, rating,
+  review_count, claimed, verified, opened_year, closure_state, closure_note,
+  closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
+  attribute_meta, default_source, default_updated_at, schedules, happy_hours,
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+) values
 (
   'loyalpour',
   'The Loyal Pour',
@@ -336,7 +382,53 @@ insert into venues (
   '{"16":0.35,"17":0.55,"18":0.7,"19":0.75,"20":0.6,"21":0.5,"22":0.35}'::jsonb,
   ARRAY['bar_hold', 'walk_in']::booking_mode[],
   'Tour and tasting-flight slots hold your spot for 15 minutes past the start time. Cancel any time at no charge. Group reservations of 20 or more require a deposit.'
-),
+)
+on conflict (id) do update set
+  name = excluded.name,
+  alternate_names = excluded.alternate_names,
+  primary_vertical = excluded.primary_vertical,
+  primary_category = excluded.primary_category,
+  secondary = excluded.secondary,
+  price_tier = excluded.price_tier,
+  neighborhood = excluded.neighborhood,
+  address = excluded.address,
+  map_x = excluded.map_x,
+  map_y = excluded.map_y,
+  phone = excluded.phone,
+  website = excluded.website,
+  rating = excluded.rating,
+  review_count = excluded.review_count,
+  claimed = excluded.claimed,
+  verified = excluded.verified,
+  opened_year = excluded.opened_year,
+  closure_state = excluded.closure_state,
+  closure_note = excluded.closure_note,
+  consumer_alert = excluded.consumer_alert,
+  promoted = excluded.promoted,
+  tagline = excluded.tagline,
+  about = excluded.about,
+  attributes = excluded.attributes,
+  attribute_meta = excluded.attribute_meta,
+  default_source = excluded.default_source,
+  default_updated_at = excluded.default_updated_at,
+  schedules = excluded.schedules,
+  happy_hours = excluded.happy_hours,
+  photos = excluded.photos,
+  menus = excluded.menus,
+  qa = excluded.qa,
+  sub_rating_averages = excluded.sub_rating_averages,
+  busyness = excluded.busyness,
+  booking_modes = excluded.booking_modes,
+  booking_terms = excluded.booking_terms;
+
+insert into venues (
+  id, name, alternate_names, primary_vertical, primary_category, secondary,
+  price_tier, neighborhood, address, map_x, map_y, phone, website, rating,
+  review_count, claimed, verified, opened_year, closure_state, closure_note,
+  closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
+  attribute_meta, default_source, default_updated_at, schedules, happy_hours,
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+) values
 (
   'pocketaces',
   'Pocket Aces',
@@ -496,7 +588,53 @@ insert into venues (
   '{"0":0.6,"19":0.4,"20":0.7,"21":0.9,"22":0.95,"23":0.8}'::jsonb,
   ARRAY['reservation']::booking_mode[],
   'Two-hour table. Card required to hold; $25 per seat charged for a no-show or a cancellation inside 6 hours.'
-),
+)
+on conflict (id) do update set
+  name = excluded.name,
+  alternate_names = excluded.alternate_names,
+  primary_vertical = excluded.primary_vertical,
+  primary_category = excluded.primary_category,
+  secondary = excluded.secondary,
+  price_tier = excluded.price_tier,
+  neighborhood = excluded.neighborhood,
+  address = excluded.address,
+  map_x = excluded.map_x,
+  map_y = excluded.map_y,
+  phone = excluded.phone,
+  website = excluded.website,
+  rating = excluded.rating,
+  review_count = excluded.review_count,
+  claimed = excluded.claimed,
+  verified = excluded.verified,
+  opened_year = excluded.opened_year,
+  closure_state = excluded.closure_state,
+  closure_note = excluded.closure_note,
+  consumer_alert = excluded.consumer_alert,
+  promoted = excluded.promoted,
+  tagline = excluded.tagline,
+  about = excluded.about,
+  attributes = excluded.attributes,
+  attribute_meta = excluded.attribute_meta,
+  default_source = excluded.default_source,
+  default_updated_at = excluded.default_updated_at,
+  schedules = excluded.schedules,
+  happy_hours = excluded.happy_hours,
+  photos = excluded.photos,
+  menus = excluded.menus,
+  qa = excluded.qa,
+  sub_rating_averages = excluded.sub_rating_averages,
+  busyness = excluded.busyness,
+  booking_modes = excluded.booking_modes,
+  booking_terms = excluded.booking_terms;
+
+insert into venues (
+  id, name, alternate_names, primary_vertical, primary_category, secondary,
+  price_tier, neighborhood, address, map_x, map_y, phone, website, rating,
+  review_count, claimed, verified, opened_year, closure_state, closure_note,
+  closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
+  attribute_meta, default_source, default_updated_at, schedules, happy_hours,
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+) values
 (
   'zafeera',
   'Zafeera Lounge',
@@ -656,7 +794,53 @@ insert into venues (
   '{"12":0.3,"14":0.4,"16":0.55,"17":0.7,"18":0.65,"19":0.5,"20":0.35}'::jsonb,
   ARRAY['inquiry', 'walk_in']::booking_mode[],
   'Locker requests are routed to the shop. No card is collected at request time.'
-),
+)
+on conflict (id) do update set
+  name = excluded.name,
+  alternate_names = excluded.alternate_names,
+  primary_vertical = excluded.primary_vertical,
+  primary_category = excluded.primary_category,
+  secondary = excluded.secondary,
+  price_tier = excluded.price_tier,
+  neighborhood = excluded.neighborhood,
+  address = excluded.address,
+  map_x = excluded.map_x,
+  map_y = excluded.map_y,
+  phone = excluded.phone,
+  website = excluded.website,
+  rating = excluded.rating,
+  review_count = excluded.review_count,
+  claimed = excluded.claimed,
+  verified = excluded.verified,
+  opened_year = excluded.opened_year,
+  closure_state = excluded.closure_state,
+  closure_note = excluded.closure_note,
+  consumer_alert = excluded.consumer_alert,
+  promoted = excluded.promoted,
+  tagline = excluded.tagline,
+  about = excluded.about,
+  attributes = excluded.attributes,
+  attribute_meta = excluded.attribute_meta,
+  default_source = excluded.default_source,
+  default_updated_at = excluded.default_updated_at,
+  schedules = excluded.schedules,
+  happy_hours = excluded.happy_hours,
+  photos = excluded.photos,
+  menus = excluded.menus,
+  qa = excluded.qa,
+  sub_rating_averages = excluded.sub_rating_averages,
+  busyness = excluded.busyness,
+  booking_modes = excluded.booking_modes,
+  booking_terms = excluded.booking_terms;
+
+insert into venues (
+  id, name, alternate_names, primary_vertical, primary_category, secondary,
+  price_tier, neighborhood, address, map_x, map_y, phone, website, rating,
+  review_count, claimed, verified, opened_year, closure_state, closure_note,
+  closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
+  attribute_meta, default_source, default_updated_at, schedules, happy_hours,
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+) values
 (
   'emberroom',
   'The Ember Room',
@@ -1124,7 +1308,32 @@ insert into reviews (
     true,
     'The tap list is fed straight from our system, so it should always match. Thanks Kevin.',
     '2026-08-17T12:00:00Z'::timestamptz
-  ),
+  )
+on conflict (seed_key) do update set
+  venue_id = excluded.venue_id,
+  author_name = excluded.author_name,
+  author_trust = excluded.author_trust,
+  elite = excluded.elite,
+  rating = excluded.rating,
+  sub_ratings = excluded.sub_ratings,
+  body = excluded.body,
+  visited_on = excluded.visited_on,
+  created_at = excluded.created_at,
+  helpful = excluded.helpful,
+  insightful = excluded.insightful,
+  funny = excluded.funny,
+  tags = excluded.tags,
+  photo_count = excluded.photo_count,
+  comped = excluded.comped,
+  recommended = excluded.recommended,
+  owner_response = excluded.owner_response,
+  owner_response_at = excluded.owner_response_at;
+
+insert into reviews (
+  seed_key, venue_id, author_name, author_trust, elite, rating, sub_ratings, body,
+  visited_on, created_at, edited, helpful, insightful, funny, tags, photo_count,
+  comped, recommended, owner_response, owner_response_at
+) values
   (
     'rv-11',
     'loyalpour',
@@ -1344,7 +1553,32 @@ insert into reviews (
     true,
     NULL,
     NULL
-  ),
+  )
+on conflict (seed_key) do update set
+  venue_id = excluded.venue_id,
+  author_name = excluded.author_name,
+  author_trust = excluded.author_trust,
+  elite = excluded.elite,
+  rating = excluded.rating,
+  sub_ratings = excluded.sub_ratings,
+  body = excluded.body,
+  visited_on = excluded.visited_on,
+  created_at = excluded.created_at,
+  helpful = excluded.helpful,
+  insightful = excluded.insightful,
+  funny = excluded.funny,
+  tags = excluded.tags,
+  photo_count = excluded.photo_count,
+  comped = excluded.comped,
+  recommended = excluded.recommended,
+  owner_response = excluded.owner_response,
+  owner_response_at = excluded.owner_response_at;
+
+insert into reviews (
+  seed_key, venue_id, author_name, author_trust, elite, rating, sub_ratings, body,
+  visited_on, created_at, edited, helpful, insightful, funny, tags, photo_count,
+  comped, recommended, owner_response, owner_response_at
+) values
   (
     'rv-21',
     'bramble',
@@ -1564,7 +1798,32 @@ insert into reviews (
     true,
     NULL,
     NULL
-  ),
+  )
+on conflict (seed_key) do update set
+  venue_id = excluded.venue_id,
+  author_name = excluded.author_name,
+  author_trust = excluded.author_trust,
+  elite = excluded.elite,
+  rating = excluded.rating,
+  sub_ratings = excluded.sub_ratings,
+  body = excluded.body,
+  visited_on = excluded.visited_on,
+  created_at = excluded.created_at,
+  helpful = excluded.helpful,
+  insightful = excluded.insightful,
+  funny = excluded.funny,
+  tags = excluded.tags,
+  photo_count = excluded.photo_count,
+  comped = excluded.comped,
+  recommended = excluded.recommended,
+  owner_response = excluded.owner_response,
+  owner_response_at = excluded.owner_response_at;
+
+insert into reviews (
+  seed_key, venue_id, author_name, author_trust, elite, rating, sub_ratings, body,
+  visited_on, created_at, edited, helpful, insightful, funny, tags, photo_count,
+  comped, recommended, owner_response, owner_response_at
+) values
   (
     'rv-31',
     'bayouleaf',
