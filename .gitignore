@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# machine-local Claude Code permissions, not project config
+.claude/settings.local.json
+
 # Expo
 .expo/
 dist/
