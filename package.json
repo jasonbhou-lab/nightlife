@@ -14,6 +14,7 @@
     "expo-linking": "~57.0.7",
     "expo-router": "~57.0.15",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.16",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
@@ -42,7 +43,11 @@
     "db:seed": "supabase db query --linked -f supabase/seed.sql",
     "db:types": "supabase gen types typescript --project-id wfrgebdwbddhitjvqrhl > src/lib/database.types.ts",
     "db:lint": "node scripts/lint-sql.mjs",
-    "build:web": "expo export --platform web"
+    "build:web": "expo export --platform web",
+    "eas:init": "eas init",
+    "eas:build:preview": "eas build --profile preview --platform android",
+    "eas:build:ios": "eas build --profile preview --platform ios",
+    "eas:update": "eas update --branch preview"
   },
   "private": true
 }
