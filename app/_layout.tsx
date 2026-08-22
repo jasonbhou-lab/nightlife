@@ -5,6 +5,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AgeGate } from '@/components/AgeGate';
+import { CatalogueProvider } from '@/data/catalogue';
 import { AppProvider, useApp } from '@/state/AppProvider';
 
 function Shell() {
@@ -50,7 +51,12 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AppProvider>
-        <Shell />
+        {/* Catalogue sits inside AppProvider because it reads the theme for its
+            loading state, and outside the router so a source switch does not
+            remount the navigation tree. */}
+        <CatalogueProvider>
+          <Shell />
+        </CatalogueProvider>
       </AppProvider>
     </SafeAreaProvider>
   );

@@ -8,8 +8,7 @@ import {
   Body, Button, Card, GlassButton, gutter, HeroCard, IconBadge, QuickActions, Screen,
   SectionHeader, StatCard, styles as ui,
 } from '@/components/ui';
-import { events } from '@/data/events';
-import { venueById, venues } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { activeHappyHour, formatDuration, formatTime, venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -25,8 +24,12 @@ export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { now, session, prefs, setPrefs, bookings } = useApp();
+  const { venues, events, venueById } = useCatalogue();
 
-  const openNow = useMemo(() => venues.filter((v) => !v.closure && venueState(v, now).open), [now]);
+  const openNow = useMemo(
+    () => venues.filter((v) => !v.closure && venueState(v, now).open),
+    [venues, now],
+  );
 
   const happyNow = useMemo(
     () =>
@@ -35,7 +38,7 @@ export default function HomeScreen() {
         .map((v) => ({ v, hh: activeHappyHour(v, now) }))
         .filter((x) => x.hh != null)
         .sort((a, b) => (a.hh!.minutesLeft - b.hh!.minutesLeft)),
-    [now],
+    [venues, now],
   );
 
   const noCover = useMemo(
@@ -67,14 +70,14 @@ export default function HomeScreen() {
       return s;
     };
     return venues.filter((v) => !v.closure).slice().sort((a, b) => score(b) - score(a)).slice(0, 3);
-  }, [prefs, now]);
+  }, [venues, prefs, now]);
 
   const tonightProgramming = useMemo(() => {
     const dow = now.getDay();
     return events
       .filter((e) => (e.recurring ? e.weekday === dow : e.date === now.toISOString().slice(0, 10)))
       .slice(0, 3);
-  }, [now]);
+  }, [events, now]);
 
   const upcoming = bookings.filter((b) => b.status !== 'cancelled');
 

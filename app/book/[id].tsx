@@ -8,7 +8,7 @@ import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
-import { getVenue, venues } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { bookingModeLabel, money } from '@/lib/format';
 import { formatTime, isOpenAt, venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -29,6 +29,7 @@ export default function BookScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { id, intent } = useLocalSearchParams<{ id: string; intent?: string }>();
+  const { getVenue } = useCatalogue();
   const venue = getVenue(id);
 
   const initial = useMemo<BookingMode | null>(() => {
@@ -305,6 +306,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function ReservationForm({ venue }: { venue: Venue }) {
   const theme = useTheme();
   const { addBooking, now } = useApp();
+  const { venues } = useCatalogue();
   const dates = useDates();
   const [dateIdx, setDateIdx] = useState(0);
   const [party, setParty] = useState(2);

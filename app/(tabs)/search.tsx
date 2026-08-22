@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
+import { BackendBanner } from '@/components/BackendBanner';
 import { FilterSheet } from '@/components/FilterSheet';
 import { MiniMap } from '@/components/MiniMap';
 import { VenueCard } from '@/components/VenueCard';
@@ -10,6 +11,7 @@ import {
   Body, Button, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader, styles as ui,
 } from '@/components/ui';
 import { attributeByKey } from '@/data/attributes';
+import { useCatalogue } from '@/data/catalogue';
 import { verticalMeta } from '@/data/taxonomy';
 import { formatAttribute } from '@/lib/format';
 import { activeFilterCount, parseNaturalQuery, searchVenues, suggest, type Suggestion } from '@/lib/search';
@@ -30,6 +32,7 @@ export default function SearchScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { filters, setFilters, resetFilters, now, recentSearches, pushRecentSearch } = useApp();
+  const { venues, source, error: backendError } = useCatalogue();
 
   const [text, setText] = useState(filters.query);
   const [focused, setFocused] = useState(false);
@@ -38,11 +41,14 @@ export default function SearchScreen() {
   const [areaLimited, setAreaLimited] = useState<Venue[] | null>(null);
   const [nlNote, setNlNote] = useState<string[] | null>(null);
 
-  const suggestions = useMemo(() => (focused ? suggest(text) : []), [focused, text]);
+  const suggestions = useMemo(
+    () => (focused ? suggest(text, venues) : []),
+    [focused, text, venues],
+  );
 
   const search = useMemo(
-    () => searchVenues(filters, now, areaLimited ?? undefined),
-    [filters, now, areaLimited],
+    () => searchVenues(filters, now, areaLimited ?? venues),
+    [filters, now, areaLimited, venues],
   );
 
   const count = activeFilterCount(filters);
@@ -120,7 +126,16 @@ export default function SearchScreen() {
 
   return (
     <Screen contentStyle={{ gap: space.lg }}>
-      <ScreenHeader title="Search" subtitle="Houston · 3 mi default radius" />
+      <ScreenHeader
+        title="Search"
+        subtitle={`Houston · 3 mi default radius · ${venues.length} venues`}
+      />
+
+      {source !== 'remote' || backendError ? (
+        <View style={gutter()}>
+          <BackendBanner />
+        </View>
+      ) : null}
 
       {/* Unified search bar with a separate location input (F-SEARCH-01). */}
       <View style={[gutter(), { gap: space.sm }]}>

@@ -5,7 +5,7 @@ import { Text, View } from 'react-native';
 import {
   Body, Callout, Card, Divider, gutter, Label, Screen, ScreenHeader, SectionHeader, styles as ui,
 } from '@/components/ui';
-import { getVenue } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { relativeDate } from '@/lib/format';
 import {
   DAY_LABELS_LONG, activeHappyHour, formatDuration, formatRange, formatTime, kitchenGap, retailGap,
@@ -26,6 +26,7 @@ export default function HoursScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { now } = useApp();
+  const { getVenue } = useCatalogue();
   const venue = getVenue(id);
 
   if (!venue) {

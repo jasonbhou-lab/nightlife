@@ -8,8 +8,7 @@ import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
-import { venueReviews } from '@/data/reviews';
-import { getVenue } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { relativeDate } from '@/lib/format';
 import {
   aggregateFor, FILTERED_EXPLANATION, RATING_EXPLANATION, subRatingDimensions,
@@ -32,6 +31,7 @@ export default function ReviewsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { now, session, attemptContribution } = useApp();
+  const { getVenue, venueReviews } = useCatalogue();
   const [showFiltered, setShowFiltered] = useState(false);
   const [sort, setSort] = useState<'recent' | 'helpful' | 'high' | 'low'>('recent');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -45,8 +45,8 @@ export default function ReviewsScreen() {
     );
   }
 
-  const agg = aggregateFor(venue.id, now);
   const all = venueReviews(venue.id, true);
+  const agg = aggregateFor(all, now);
   const recommended = all.filter((r) => r.recommended);
   const filtered = all.filter((r) => !r.recommended);
   const dims = subRatingDimensions[venue.primary.vertical];

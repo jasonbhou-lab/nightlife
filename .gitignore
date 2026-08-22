@@ -33,8 +33,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files. .env holds the Supabase URL and publishable key; .env.local
+# is where a service role key would go. Neither belongs in a public repo.
+# .env.example is committed as the template.
+.env
 .env*.local
+!.env.example
 
 # typescript
 *.tsbuildinfo

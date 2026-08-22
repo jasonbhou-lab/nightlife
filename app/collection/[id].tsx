@@ -7,7 +7,7 @@ import { VenueCard } from '@/components/VenueCard';
 import {
   Body, Button, Card, EmptyState, gutter, Screen, ScreenHeader, styles as ui,
 } from '@/components/ui';
-import { venueById } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, space } from '@/theme';
@@ -17,6 +17,7 @@ export default function CollectionScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { collections, removeFromCollection, now } = useApp();
+  const { venueById } = useCatalogue();
 
   const collection = collections.find((c) => c.id === id);
 

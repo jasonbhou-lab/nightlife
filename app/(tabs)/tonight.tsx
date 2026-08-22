@@ -8,9 +8,8 @@ import {
   Body, Card, Chip, gutter, HeroCard, IconBadge, Label, Screen, ScreenHeader, SectionHeader,
   styles as ui,
 } from '@/components/ui';
-import { events } from '@/data/events';
+import { useCatalogue } from '@/data/catalogue';
 import { BAR_LOUNGE_TIEBREAK, verticalMeta } from '@/data/taxonomy';
-import { venueById, venues } from '@/data/venues';
 import { verticalsOf } from '@/lib/search';
 import {
   activeHappyHour, formatDuration, formatTime, upcomingHappyHour, venueState,
@@ -50,11 +49,12 @@ export default function TonightScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { now, clockOverride, setClockOverride } = useApp();
+  const { venues, events, venueById } = useCatalogue();
 
   const hour = now.getHours();
   const order = moduleOrder(hour);
 
-  const live = useMemo(() => venues.filter((v) => !v.closure), []);
+  const live = useMemo(() => venues.filter((v) => !v.closure), [venues]);
   const openNow = useMemo(() => live.filter((v) => venueState(v, now).open), [live, now]);
   const openingSoon = useMemo(
     () => live.filter((v) => { const s = venueState(v, now); return !s.open && s.openingSoon; }),
@@ -110,7 +110,7 @@ export default function TonightScreen() {
     const dow = now.getDay();
     const iso = now.toISOString().slice(0, 10);
     return events.filter((e) => (e.recurring ? e.weekday === dow : e.date === iso));
-  }, [now]);
+  }, [events, now]);
 
   const phase =
     hour >= 5 && hour < 21 ? 'Early' : hour >= 21 && hour < 23 ? 'Bar hours' : 'Late';

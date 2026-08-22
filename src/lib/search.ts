@@ -1,5 +1,4 @@
 import { attributeByKey } from '@/data/attributes';
-import { venues } from '@/data/venues';
 import { isOpenAt, venueState } from '@/lib/hours';
 import type { AttributeValue, FilterState, SortKey, Venue, Vertical } from '@/types';
 
@@ -214,7 +213,13 @@ export type SearchResult = {
   adjacentCategories: Vertical[];
 };
 
-export function searchVenues(f: FilterState, now: Date, pool: Venue[] = venues): SearchResult {
+/**
+ * `pool` is required rather than defaulting to the bundled seed: the catalogue
+ * can come from the database now, and a function that silently searches stale
+ * bundled data when a caller forgets an argument is worse than one that will
+ * not compile.
+ */
+export function searchVenues(f: FilterState, now: Date, pool: Venue[]): SearchResult {
   const predicates = buildPredicates(f, now);
   const passes = (v: Venue) => predicates.every((p) => p.test(v));
 
@@ -269,19 +274,19 @@ export type Suggestion = {
  * F-SEARCH-02: venues, categories, dishes, and cigar brands come back as
  * distinct result groups rather than one undifferentiated list.
  */
-export function suggest(query: string, limitPerGroup = 4): Suggestion[] {
+export function suggest(query: string, pool: Venue[], limitPerGroup = 4): Suggestion[] {
   const q = query.trim().toLowerCase();
   if (q.length < 2) return [];
   const out: Suggestion[] = [];
 
-  for (const v of venues) {
+  for (const v of pool) {
     if (v.name.toLowerCase().includes(q) || (v.alternateNames ?? []).some((a) => a.toLowerCase().includes(q))) {
       out.push({ kind: 'venue', label: v.name, detail: `${v.primary.category} · ${v.neighborhood}`, venueId: v.id });
     }
   }
 
   const cats = new Set<string>();
-  for (const v of venues) {
+  for (const v of pool) {
     for (const c of categoriesOf(v)) {
       if (c.toLowerCase().includes(q) && !cats.has(c)) {
         cats.add(c);
@@ -291,7 +296,7 @@ export function suggest(query: string, limitPerGroup = 4): Suggestion[] {
   }
 
   const dishes = new Set<string>();
-  for (const v of venues) {
+  for (const v of pool) {
     for (const section of v.menus) {
       for (const item of section.items) {
         if (item.name.toLowerCase().includes(q) && !dishes.has(item.name)) {
@@ -305,7 +310,7 @@ export function suggest(query: string, limitPerGroup = 4): Suggestion[] {
   const brandDef = attributeByKey.brands;
   for (const opt of brandDef?.options ?? []) {
     if (opt.label.toLowerCase().includes(q)) {
-      const carriers = venues.filter(
+      const carriers = pool.filter(
         (v) => Array.isArray(v.attributes.brands) && (v.attributes.brands as string[]).includes(opt.value),
       );
       if (carriers.length) {

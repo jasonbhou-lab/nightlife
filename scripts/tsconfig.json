@@ -1,0 +1,15 @@
+{
+  // The scripts here run in Node, not in React Native, so they get their own
+  // compiler settings rather than borrowing the app's.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "lib": ["ES2022"],
+    "jsx": "preserve"
+  },
+  "include": ["./**/*.ts", "../src/**/*.ts"],
+  "exclude": ["../src/**/*.tsx"]
+}

@@ -7,7 +7,7 @@ import {
   Body, Button, Card, Divider, EmptyState, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
-import { venueById } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -22,6 +22,7 @@ export default function SavedScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { collections, createCollection, deleteCollection, now, bookings } = useApp();
+  const { venueById } = useCatalogue();
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
 

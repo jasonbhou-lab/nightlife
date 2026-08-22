@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Chip, Divider, Label, styles as ui } from '@/components/ui';
 import { filterableForVerticals, groupLabels } from '@/data/attributes';
+import { useCatalogue } from '@/data/catalogue';
 import { verticalMeta, VERTICALS } from '@/data/taxonomy';
 import { searchVenues } from '@/lib/search';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -50,6 +51,7 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { filters, setFilters, resetFilters, now } = useApp();
+  const { venues } = useCatalogue();
   const [draft, setDraft] = useState<FilterState>(filters);
 
   // Re-seed the draft whenever the sheet opens.
@@ -61,7 +63,10 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
     setWasVisible(false);
   }
 
-  const liveCount = useMemo(() => searchVenues(draft, now).results.length, [draft, now]);
+  const liveCount = useMemo(
+    () => searchVenues(draft, now, venues).results.length,
+    [draft, now, venues],
+  );
 
   const defs = useMemo(() => filterableForVerticals(draft.verticals), [draft.verticals]);
 

@@ -11,10 +11,8 @@ import {
   AdLabel, Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen,
   ScreenHeader, SectionHeader, styles as ui,
 } from '@/components/ui';
-import { eventsForVenue } from '@/data/events';
-import { filteredCount, venueReviews } from '@/data/reviews';
+import { useCatalogue } from '@/data/catalogue';
 import { verticalMeta } from '@/data/taxonomy';
-import { getVenue, venues } from '@/data/venues';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { actionsFor, categoryLine, freshness, metaFor, priceLabel, relativeDate } from '@/lib/format';
 import {
@@ -25,13 +23,16 @@ import { aggregateFor, subRatingDimensions } from '@/lib/ratings';
 import { verticalsOf } from '@/lib/search';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
-import type { Photo } from '@/types';
+import type { Photo, Venue } from '@/types';
 
 export default function VenueProfile() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { now, isSaved, toggleSave, session, canBook, attemptContribution } = useApp();
+  const {
+    venues, getVenue, venueReviews, filteredCount, eventsForVenue,
+  } = useCatalogue();
   const [album, setAlbum] = useState<Photo['album'] | 'all'>('all');
 
   const venue = getVenue(id);
@@ -51,7 +52,7 @@ export default function VenueProfile() {
   }
 
   const state = venueState(venue, now);
-  const agg = aggregateFor(venue.id, now);
+  const agg = aggregateFor(venueReviews(venue.id, true), now);
   const chips = decisionChips(venue, now, 6);
   const headline = headlineAnswer(venue, now);
   const actions = actionsFor(venue);
@@ -84,7 +85,7 @@ export default function VenueProfile() {
         )
         .sort((a, b) => Math.abs(a.priceTier - venue.priceTier) - Math.abs(b.priceTier - venue.priceTier) || b.rating - a.rating)
         .slice(0, 2),
-    [venue],
+    [venues, venue],
   );
 
   const runAction = (key: string) => {
@@ -364,7 +365,7 @@ export default function VenueProfile() {
             ))}
           </View>
           {venue.attributes.coverCharge != null ? (
-            <StaleNote venueId={venue.id} attrKey="coverCharge" />
+            <StaleNote venue={venue} attrKey="coverCharge" />
           ) : null}
 
           {/*
@@ -719,11 +720,9 @@ export default function VenueProfile() {
   );
 }
 
-function StaleNote({ venueId, attrKey }: { venueId: string; attrKey: string }) {
+function StaleNote({ venue, attrKey }: { venue: Venue; attrKey: string }) {
   const theme = useTheme();
   const { now } = useApp();
-  const venue = getVenue(venueId);
-  if (!venue) return null;
   const f = freshness(venue, attrKey, now);
   if (!f.note) return null;
   return (

@@ -7,8 +7,7 @@ import {
   Body, Button, Card, Chip, EmptyState, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
-import { events } from '@/data/events';
-import { venueById } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { DAY_LABELS, DAY_LABELS_LONG, formatTime } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -24,6 +23,7 @@ export default function EventsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { now, session } = useApp();
+  const { events, venueById } = useCatalogue();
 
   const [dayOffset, setDayOffset] = useState(0);
   const [genre, setGenre] = useState<string | null>(null);
@@ -51,16 +51,16 @@ export default function EventsScreen() {
 
   const onDay = useMemo(
     () => events.filter((e) => (e.recurring ? e.weekday === day.dow : e.date === day.iso)),
-    [day],
+    [events, day],
   );
 
   const genres = useMemo(
     () => Array.from(new Set(events.map((e) => e.genre).filter(Boolean))) as string[],
-    [],
+    [events],
   );
   const neighborhoods = useMemo(
     () => Array.from(new Set(events.map((e) => venueById[e.venueId]?.neighborhood).filter(Boolean))) as string[],
-    [],
+    [events, venueById],
   );
 
   const filtered = useMemo(

@@ -8,7 +8,7 @@ import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
-import { getVenue } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { subRatingDimensions, tagVocabulary } from '@/lib/ratings';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -31,6 +31,7 @@ export default function NewReviewScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { drafts, saveDraft, clearDraft, now, session } = useApp();
+  const { getVenue } = useCatalogue();
 
   const venue = getVenue(id);
   const existing = id ? drafts[id] : undefined;

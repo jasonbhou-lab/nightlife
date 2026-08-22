@@ -7,7 +7,7 @@ import {
   Body, Callout, Card, Chip, Divider, gutter, Label, Screen, ScreenHeader, SectionHeader,
   styles as ui,
 } from '@/components/ui';
-import { getVenue } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { formatAttribute, relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -36,6 +36,7 @@ export default function MenuScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { now } = useApp();
+  const { getVenue } = useCatalogue();
   const venue = getVenue(id);
 
   if (!venue) {

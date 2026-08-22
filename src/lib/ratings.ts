@@ -1,4 +1,3 @@
-import { venueReviews } from '@/data/reviews';
 import type { Review, SubRatingKey, Vertical } from '@/types';
 
 /**
@@ -36,9 +35,12 @@ export type Aggregate = {
   subRatings: Partial<Record<SubRatingKey, number>>;
 };
 
-export function aggregateFor(venueId: string, now: Date): Aggregate {
-  const recommended = venueReviews(venueId);
-  const all = venueReviews(venueId, true);
+/**
+ * Aggregate over a venue's reviews. Takes the review list rather than fetching
+ * it, so the same function serves the bundled seed and the database.
+ */
+export function aggregateFor(all: Review[], now: Date): Aggregate {
+  const recommended = all.filter((r) => r.recommended);
   const filtered = all.length - recommended.length;
 
   const distribution: [number, number, number, number, number] = [0, 0, 0, 0, 0];

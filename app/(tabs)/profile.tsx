@@ -3,12 +3,12 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, Pressable, Switch, Text, View } from 'react-native';
 
+import { BackendBanner } from '@/components/BackendBanner';
 import {
   Body, Button, Card, Chip, Divider, gutter, HeroCard, IconBadge, InsetPill, Label, Screen,
   ScreenHeader, SectionHeader, styles as ui,
 } from '@/components/ui';
-import { reviews } from '@/data/reviews';
-import { venueById } from '@/data/venues';
+import { useCatalogue } from '@/data/catalogue';
 import { RATING_EXPLANATION } from '@/lib/ratings';
 import { formatTime } from '@/lib/hours';
 import { useApp, useTheme, type ThemeSetting } from '@/state/AppProvider';
@@ -26,6 +26,7 @@ export default function ProfileScreen() {
     session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now,
   } = useApp();
+  const { reviews, venueById, source } = useCatalogue();
 
   // Notification preferences are per-category and cannot be bundled with
   // transactional messages (F-NOTIF-02).
@@ -310,6 +311,15 @@ export default function ProfileScreen() {
             ) : null}
           </View>
         </Card>
+      </View>
+
+      {/* Where the data is coming from. */}
+      <View style={gutter()}>
+        <SectionHeader
+          title="Data source"
+          subtitle={source === 'remote' ? 'Connected' : 'Local sample data'}
+        />
+        <BackendBanner />
       </View>
 
       {/* How the rating is computed, published in plain language. */}

@@ -25,7 +25,7 @@ Expo Go to run on a physical device.
 ## What is implemented
 
 Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston database of
-19 venues, 39 reviews, and 26 events.
+19 venues, 39 reviews, and 20 events.
 
 | Area | Requirements covered |
 |---|---|
@@ -88,7 +88,9 @@ rises later. The rule is stated in the UI rather than left implicit.
 
 ## What is deliberately not implemented
 
-- **No backend.** All data is seeded in `src/data/`. Persistence is `AsyncStorage` on the device.
+- **A backend that is wired but not yet provisioned.** The Supabase schema, RLS policies, seed,
+  and client are all in the repo (see *Backend* below), but the project itself has not had the
+  migration applied yet, so the app runs on the bundled seed until it does.
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
   No card fields exist anywhere in the app.
 - **No real authentication.** Sign-in collects a display name and a phone number and creates
@@ -110,6 +112,87 @@ rises later. The rule is stated in the UI rather than left implicit.
   network dependency or API key. It implements the requirement that matters — pin interaction and
   map-bounded re-search. Swapping in `react-native-maps` later replaces that one component; the
   bounds contract is unchanged.
+
+## Backend
+
+Supabase. The schema, row-level security, and seed live in `supabase/`; the client and data
+access layer in `src/lib/supabase.ts` and `src/data/`.
+
+### Bringing it up
+
+```bash
+cp .env.example .env
+```
+
+Put the project URL and publishable key in `.env` (Supabase dashboard → Project Settings → API
+Keys). Then apply the schema and seed:
+
+```bash
+npx supabase link --project-ref wfrgebdwbddhitjvqrhl
+```
+
+```bash
+npm run db:push && npm run db:seed && npm run db:types
+```
+
+Restart the bundler with `npx expo start --clear` so the new env vars are inlined. The Profile
+screen shows which source is live; the Search screen shows a banner whenever it is not the
+database.
+
+### What the schema does
+
+Venue *documents* — schedules, menus, photos, Q&A, attributes — are `jsonb` on the venue row,
+because they are always read as a whole venue. Things written or queried on their own get real
+tables: reviews, bookings, collections, events, table tiers, profiles.
+
+The PRD requires attributes to be filterable, not merely displayable, and `jsonb` does not give
+that up: containment filters run off a GIN index, and the numeric comparisons the filter sheet
+actually issues (tap count, humidor size, cover ceiling) have expression indexes. The attribute
+*registry* stays in `src/data/attributes.ts` as the schema of record, which is what keeps one
+declaration driving the filter sheet, the profile panel, and staleness expiry. The alternative —
+roughly a hundred typed columns, most of them null for any given vertical — buys stricter typing
+at the cost of a migration every time a vertical gains an attribute.
+
+### Rules enforced in the database, not the client
+
+NFR-07 says role-based access control is enforced server-side and client-side gating is
+presentation only. So:
+
+- Writing a review requires a verified account, your own `author_id`, and no business role at
+  that venue — the conflict-of-interest rule from F-TRUST-06 is a policy predicate, not a UI check.
+- `recommended`, the community feedback counts, and owner responses are rejected by trigger if a
+  client tries to set them. A reviewer cannot place their own review into the rating.
+- `trust`, `elite`, and the verification flags are server-maintained; a user updating their own
+  profile cannot raise them.
+- Bookings, collections, and drafts are readable and writable only by their owner. Shared
+  collections are readable by link, which is the one deliberate exception.
+- A deposit cannot be recorded without the terms acceptance that F-BOOK-11 requires.
+
+One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
+enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus
+unable to hold the low-effort spam the recommendation software exists to catch, or to ingest
+historical rows from a provider feed.
+
+### Offline and fallback
+
+`src/data/repository.ts` never throws. If the backend is absent or unreachable it returns the
+bundled seed and reports why, and the UI says so rather than showing a spinner or a blank screen.
+That is not politeness — U-07 requires saved venues and confirmations to stay readable without
+connectivity, and the PRD is explicit that club basements have poor signal.
+
+The catalogue is fetched whole and filtered on-device by the existing engine. That is the right
+shape at launch-metro scale — one round trip, then instant filtering, and it works offline. It is
+**not** the right shape at the 50M-venue scale of NFR-03; at that point the filter predicates move
+into a Postgres RPC and `repository.ts` starts passing filters down instead of fetching everything.
+The seam is in one file so that change stays contained.
+
+### Keys
+
+`EXPO_PUBLIC_*` variables are inlined into the shipped bundle. That is correct for the project URL
+and publishable key, which are designed to live in a client and are backed by RLS. The service role
+key must never go in an `EXPO_PUBLIC_` variable or in `.env` — it bypasses RLS entirely, and in a
+client bundle it would hand every user full access to the database. `.env` and `.env.local` are
+gitignored; `.env.example` is the committed template.
 
 ## Compliance posture
 
@@ -151,10 +234,27 @@ app/                     expo-router routes
 src/
   theme/                 design tokens, light and dark
   types.ts               domain model
-  data/                  taxonomy, attribute registry, venues, reviews, events
-  lib/                   hours, search and ranking, ratings, decision chips, formatting
+  data/
+    attributes.ts        the typed attribute registry
+    taxonomy.ts          verticals and categories
+    venues|reviews|events.ts   bundled seed / offline fallback
+    catalogue.tsx        catalogue context: whichever source is live
+    repository.ts        Supabase reads and writes, with seed fallback
+  lib/
+    hours.ts             operating calendar, after-midnight math
+    search.ts            filtering, ranking, zero-result recovery
+    ratings.ts           aggregate weighting and its published explanation
+    decide.ts            per-category decision attributes
+    format.ts            value rendering, provenance, action sets
+    supabase.ts          client
+    database.types.ts    generated by `npm run db:types`
   state/AppProvider.tsx  session, filters, saves, bookings, drafts, prefs, clock
   components/            design-system primitives and composites
+supabase/
+  migrations/            schema, RLS, triggers
+  seed.sql               generated from src/data by npm run db:generate-seed
+scripts/
+  generate-seed-sql.ts   keeps the SQL seed from drifting off the TS seed
 ```
 
 ## Notes on the seed data
