@@ -15,7 +15,8 @@ insert into venues (
   review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
-  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
+  avg_response_minutes
 ) values
 (
   'vela',
@@ -55,7 +56,8 @@ insert into venues (
   '{"food":4.7,"service":4.5,"ambiance":4.6,"value":3.9}'::jsonb,
   '{"17":0.3,"18":0.55,"19":0.85,"20":0.95,"21":0.7,"22":0.4,"23":0.2}'::jsonb,
   ARRAY['reservation']::booking_mode[],
-  'No deposit for parties under 8. Parties of 8 or more hold a card; cancellations inside 24 hours are charged $25 per guest. Private rooms require a signed food and beverage minimum.'
+  'No deposit for parties under 8. Parties of 8 or more hold a card; cancellations inside 24 hours are charged $25 per guest. Private rooms require a signed food and beverage minimum.',
+  25
 ),
 (
   'anhbep',
@@ -95,6 +97,7 @@ insert into venues (
   '{"food":4.8,"service":4.4,"ambiance":4,"value":4.7}'::jsonb,
   '{"0":0.65,"1":0.5,"11":0.5,"12":0.85,"18":0.7,"19":0.8,"20":0.6,"23":0.5}'::jsonb,
   ARRAY['waitlist', 'walk_in']::booking_mode[],
+  NULL,
   NULL
 ),
 (
@@ -135,7 +138,8 @@ insert into venues (
   '{"food":4.4,"service":4.1,"ambiance":4.5,"value":4}'::jsonb,
   '{"16":0.4,"17":0.7,"18":0.9,"19":0.85,"20":0.6,"21":0.45,"22":0.25}'::jsonb,
   ARRAY['reservation', 'waitlist']::booking_mode[],
-  'Cancel up to 2 hours ahead at no charge. Parties of 10 or more require a $100 deposit, refundable up to 48 hours before.'
+  'Cancel up to 2 hours ahead at no charge. Parties of 10 or more require a $100 deposit, refundable up to 48 hours before.',
+  NULL
 ),
 (
   'tortilla9',
@@ -175,6 +179,7 @@ insert into venues (
   '{"food":4,"service":3.9,"ambiance":4.5,"value":4.3}'::jsonb,
   '{"11":0.5,"12":0.9,"13":0.95,"17":0.6,"18":0.8,"19":0.85,"20":0.6}'::jsonb,
   ARRAY['waitlist', 'bar_hold']::booking_mode[],
+  NULL,
   NULL
 )
 on conflict (id) do update set
@@ -213,7 +218,8 @@ on conflict (id) do update set
   sub_rating_averages = excluded.sub_rating_averages,
   busyness = excluded.busyness,
   booking_modes = excluded.booking_modes,
-  booking_terms = excluded.booking_terms;
+  booking_terms = excluded.booking_terms,
+  avg_response_minutes = excluded.avg_response_minutes;
 
 insert into venues (
   id, name, alternate_names, primary_vertical, primary_category, secondary,
@@ -221,7 +227,8 @@ insert into venues (
   review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
-  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
+  avg_response_minutes
 ) values
 (
   'loyalpour',
@@ -261,7 +268,8 @@ insert into venues (
   '{"drinkSelection":4.7,"pourValue":4.3,"bartender":4.5,"atmosphere":4.4,"noise":4.1}'::jsonb,
   '{"0":0.25,"15":0.2,"16":0.4,"17":0.65,"18":0.8,"19":0.75,"20":0.7,"21":0.75,"22":0.6,"23":0.4}'::jsonb,
   ARRAY['bar_hold', 'walk_in']::booking_mode[],
-  'Large-party holds and buyouts require a food and beverage minimum quoted in advance. High-top holds are released 20 minutes after the stated arrival window.'
+  'Large-party holds and buyouts require a food and beverage minimum quoted in advance. High-top holds are released 20 minutes after the stated arrival window.',
+  NULL
 ),
 (
   'kirby3',
@@ -301,7 +309,8 @@ insert into venues (
   '{"drinkSelection":3.9,"pourValue":4.2,"bartender":4,"atmosphere":4.4,"noise":2.6}'::jsonb,
   '{"15":0.3,"16":0.5,"17":0.7,"18":0.85,"19":0.9,"20":0.95,"21":0.85,"22":0.6,"23":0.4}'::jsonb,
   ARRAY['bar_hold', 'walk_in']::booking_mode[],
-  'Game-day table holds require a $25 per person food and beverage minimum, applied to your tab. Released 15 minutes after kickoff if the party has not arrived. No refund on no-show.'
+  'Game-day table holds require a $25 per person food and beverage minimum, applied to your tab. Released 15 minutes after kickoff if the party has not arrived. No refund on no-show.',
+  12
 ),
 (
   'ratchet',
@@ -341,6 +350,7 @@ insert into venues (
   '{"drinkSelection":3.4,"pourValue":4.8,"bartender":4.4,"atmosphere":4.6,"noise":3.6}'::jsonb,
   '{"0":0.7,"1":0.5,"17":0.3,"18":0.4,"19":0.5,"20":0.6,"21":0.7,"22":0.8,"23":0.85}'::jsonb,
   ARRAY['walk_in']::booking_mode[],
+  NULL,
   NULL
 ),
 (
@@ -381,7 +391,8 @@ insert into venues (
   '{"drinkSelection":4.8,"pourValue":4.4,"bartender":4.5,"atmosphere":4.6,"noise":4.2}'::jsonb,
   '{"16":0.35,"17":0.55,"18":0.7,"19":0.75,"20":0.6,"21":0.5,"22":0.35}'::jsonb,
   ARRAY['bar_hold', 'walk_in']::booking_mode[],
-  'Tour and tasting-flight slots hold your spot for 15 minutes past the start time. Cancel any time at no charge. Group reservations of 20 or more require a deposit.'
+  'Tour and tasting-flight slots hold your spot for 15 minutes past the start time. Cancel any time at no charge. Group reservations of 20 or more require a deposit.',
+  90
 )
 on conflict (id) do update set
   name = excluded.name,
@@ -419,7 +430,8 @@ on conflict (id) do update set
   sub_rating_averages = excluded.sub_rating_averages,
   busyness = excluded.busyness,
   booking_modes = excluded.booking_modes,
-  booking_terms = excluded.booking_terms;
+  booking_terms = excluded.booking_terms,
+  avg_response_minutes = excluded.avg_response_minutes;
 
 insert into venues (
   id, name, alternate_names, primary_vertical, primary_category, secondary,
@@ -427,7 +439,8 @@ insert into venues (
   review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
-  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
+  avg_response_minutes
 ) values
 (
   'pocketaces',
@@ -467,7 +480,8 @@ insert into venues (
   '{"drinkSelection":4,"pourValue":4.1,"bartender":4.2,"atmosphere":4.6,"noise":2.2}'::jsonb,
   '{"0":0.7,"1":0.45,"17":0.3,"18":0.45,"19":0.6,"20":0.75,"21":0.85,"22":0.95,"23":0.9}'::jsonb,
   ARRAY['bar_hold', 'walk_in']::booking_mode[],
-  'High-top holds are released 20 minutes past the arrival window. No deposit.'
+  'High-top holds are released 20 minutes past the arrival window. No deposit.',
+  NULL
 ),
 (
   'bramble',
@@ -507,7 +521,8 @@ insert into venues (
   '{"drinkSelection":4.9,"pourValue":4,"bartender":4.8,"atmosphere":4.8,"noise":4.7}'::jsonb,
   '{"0":0.4,"17":0.25,"18":0.45,"19":0.6,"20":0.7,"21":0.8,"22":0.75,"23":0.6}'::jsonb,
   ARRAY['reservation', 'walk_in']::booking_mode[],
-  'Back-room tables held 15 minutes. Parties of 6 or more require a card on file; $20 per guest for a same-day cancellation.'
+  'Back-room tables held 15 minutes. Parties of 6 or more require a card on file; $20 per guest for a same-day cancellation.',
+  40
 ),
 (
   'verso',
@@ -547,7 +562,8 @@ insert into venues (
   '{"drinks":4,"atmosphere":4.6,"service":3.6,"comfort":4.1}'::jsonb,
   '{"0":0.9,"1":0.6,"17":0.2,"18":0.4,"19":0.55,"20":0.6,"21":0.7,"22":0.85,"23":0.95}'::jsonb,
   ARRAY['table_service', 'reservation']::booking_mode[],
-  'A deposit of 25% of the table minimum is charged at booking and applied to your tab. Refundable up to 48 hours before your arrival window; inside 48 hours it is forfeited. A 22% service charge applies to the full minimum, not the deposit alone.'
+  'A deposit of 25% of the table minimum is charged at booking and applied to your tab. Refundable up to 48 hours before your arrival window; inside 48 hours it is forfeited. A 22% service charge applies to the full minimum, not the deposit alone.',
+  20
 ),
 (
   'quietpart',
@@ -587,7 +603,8 @@ insert into venues (
   '{"drinks":4.9,"atmosphere":4.9,"service":4.7,"comfort":4.6}'::jsonb,
   '{"0":0.6,"19":0.4,"20":0.7,"21":0.9,"22":0.95,"23":0.8}'::jsonb,
   ARRAY['reservation']::booking_mode[],
-  'Two-hour table. Card required to hold; $25 per seat charged for a no-show or a cancellation inside 6 hours.'
+  'Two-hour table. Card required to hold; $25 per seat charged for a no-show or a cancellation inside 6 hours.',
+  35
 )
 on conflict (id) do update set
   name = excluded.name,
@@ -625,7 +642,8 @@ on conflict (id) do update set
   sub_rating_averages = excluded.sub_rating_averages,
   busyness = excluded.busyness,
   booking_modes = excluded.booking_modes,
-  booking_terms = excluded.booking_terms;
+  booking_terms = excluded.booking_terms,
+  avg_response_minutes = excluded.avg_response_minutes;
 
 insert into venues (
   id, name, alternate_names, primary_vertical, primary_category, secondary,
@@ -633,7 +651,8 @@ insert into venues (
   review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
-  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
+  avg_response_minutes
 ) values
 (
   'zafeera',
@@ -673,7 +692,8 @@ insert into venues (
   '{"drinks":3.9,"atmosphere":4.4,"service":3.8,"comfort":4.3}'::jsonb,
   '{"0":0.95,"1":0.9,"2":0.6,"19":0.2,"20":0.35,"21":0.5,"22":0.7,"23":0.85}'::jsonb,
   ARRAY['table_service', 'reservation']::booking_mode[],
-  'Table minimums apply to food, beverage, and shisha combined. A $100 deposit holds the table and is applied to your tab. Refundable up to 24 hours before; inside that it is forfeited.'
+  'Table minimums apply to food, beverage, and shisha combined. A $100 deposit holds the table and is applied to your tab. Refundable up to 24 hours before; inside that it is forfeited.',
+  NULL
 ),
 (
   'halcyon',
@@ -713,6 +733,7 @@ insert into venues (
   '{}'::jsonb,
   '{}'::jsonb,
   '{}'::booking_mode[],
+  NULL,
   NULL
 ),
 (
@@ -753,7 +774,8 @@ insert into venues (
   '{"selection":4.8,"ventilation":4.6,"comfort":4.7,"staffKnowledge":4.8,"value":4.2}'::jsonb,
   '{"15":0.3,"16":0.4,"17":0.6,"18":0.75,"19":0.8,"20":0.85,"21":0.7,"22":0.5,"23":0.3}'::jsonb,
   ARRAY['inquiry', 'walk_in']::booking_mode[],
-  'Membership and locker requests are routed to the venue; there is no charge at request time. The lounge does not take table reservations.'
+  'Membership and locker requests are routed to the venue; there is no charge at request time. The lounge does not take table reservations.',
+  300
 ),
 (
   'bayouleaf',
@@ -793,7 +815,8 @@ insert into venues (
   '{"selection":4.7,"ventilation":3.9,"comfort":4.1,"staffKnowledge":4.8,"value":4.5}'::jsonb,
   '{"12":0.3,"14":0.4,"16":0.55,"17":0.7,"18":0.65,"19":0.5,"20":0.35}'::jsonb,
   ARRAY['inquiry', 'walk_in']::booking_mode[],
-  'Locker requests are routed to the shop. No card is collected at request time.'
+  'Locker requests are routed to the shop. No card is collected at request time.',
+  NULL
 )
 on conflict (id) do update set
   name = excluded.name,
@@ -831,7 +854,8 @@ on conflict (id) do update set
   sub_rating_averages = excluded.sub_rating_averages,
   busyness = excluded.busyness,
   booking_modes = excluded.booking_modes,
-  booking_terms = excluded.booking_terms;
+  booking_terms = excluded.booking_terms,
+  avg_response_minutes = excluded.avg_response_minutes;
 
 insert into venues (
   id, name, alternate_names, primary_vertical, primary_category, secondary,
@@ -839,7 +863,8 @@ insert into venues (
   review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
-  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
+  avg_response_minutes
 ) values
 (
   'emberroom',
@@ -879,7 +904,8 @@ insert into venues (
   '{"selection":4.7,"ventilation":4.8,"comfort":4.9,"staffKnowledge":4.6,"value":3.6}'::jsonb,
   '{"17":0.4,"18":0.6,"19":0.7,"20":0.75,"21":0.6,"22":0.4}'::jsonb,
   ARRAY['inquiry']::booking_mode[],
-  'Membership inquiries are reviewed by the club. Submitting an inquiry does not create an obligation on either side.'
+  'Membership inquiries are reviewed by the club. Submitting an inquiry does not create an obligation on either side.',
+  NULL
 ),
 (
   'kosmos',
@@ -919,7 +945,8 @@ insert into venues (
   '{"music":4.4,"crowd":3.8,"service":3.2,"value":3.1,"door":2.9}'::jsonb,
   '{"0":0.95,"1":1,"2":0.9,"3":0.6,"22":0.3,"23":0.7}'::jsonb,
   ARRAY['table_service', 'waitlist']::booking_mode[],
-  'A 30% deposit of the table minimum is charged at booking and applied to your minimum. Cancellations more than 72 hours out are refunded in full; inside 72 hours the deposit is forfeited. A 22% service charge and applicable tax are calculated on the full minimum. Arrival windows are 30 minutes; tables are released after that with the deposit retained.'
+  'A 30% deposit of the table minimum is charged at booking and applied to your minimum. Cancellations more than 72 hours out are refunded in full; inside 72 hours the deposit is forfeited. A 22% service charge and applicable tax are calculated on the full minimum. Arrival windows are 30 minutes; tables are released after that with the deposit retained.',
+  15
 ),
 (
   'salaroja',
@@ -959,7 +986,8 @@ insert into venues (
   '{"music":4.6,"crowd":4.3,"service":3.7,"value":4.1,"door":3.5}'::jsonb,
   '{"0":0.95,"1":0.85,"2":0.5,"21":0.3,"22":0.55,"23":0.8}'::jsonb,
   ARRAY['table_service', 'waitlist']::booking_mode[],
-  'A $100 deposit holds the table and applies to the minimum. Refundable up to 24 hours before. A 20% service charge applies to the minimum.'
+  'A $100 deposit holds the table and applies to the minimum. Refundable up to 24 hours before. A 20% service charge applies to the minimum.',
+  NULL
 )
 on conflict (id) do update set
   name = excluded.name,
@@ -997,7 +1025,8 @@ on conflict (id) do update set
   sub_rating_averages = excluded.sub_rating_averages,
   busyness = excluded.busyness,
   booking_modes = excluded.booking_modes,
-  booking_terms = excluded.booking_terms;
+  booking_terms = excluded.booking_terms,
+  avg_response_minutes = excluded.avg_response_minutes;
 
 -- Successor links for listings that moved (F-PROFILE-12).
 update venues set closure_successor_id = 'verso' where id = 'halcyon';

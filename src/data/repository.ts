@@ -105,6 +105,7 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
       : undefined,
     bookingModes: row.booking_modes ?? [],
     bookingTerms: row.booking_terms ?? undefined,
+    avgResponseMinutes: row.avg_response_minutes ?? undefined,
     busyness: Object.fromEntries(
       Object.entries(asRecord(row.busyness)).map(([k, v]) => [Number(k), Number(v)]),
     ),
@@ -390,4 +391,56 @@ export async function syncDraft(input: {
     photo_count: input.photoCount,
     saved_at: new Date().toISOString(),
   });
+}
+
+/**
+ * Open a message thread (F-MSG). Returns the row's id so the caller can use
+ * one identifier for the thread everywhere. If there is no backend, or the
+ * caller is not signed in, the thread is kept on this device only — the
+ * caller is expected to fall back to a locally-generated id in that case
+ * rather than treat it as an error, the same way an offline booking does.
+ */
+export async function createMessageThread(input: {
+  venueId: string;
+  kind: string;
+  subject?: string;
+  intake?: Record<string, unknown>;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; kept on this device only.' };
+
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to message a venue.' };
+
+  const { data, error } = await supabase
+    .from('message_threads')
+    .insert({
+      user_id: user.id,
+      venue_id: input.venueId,
+      kind: input.kind as never,
+      subject: input.subject ?? null,
+      intake: (input.intake ?? {}) as never,
+    })
+    .select('id')
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data.id };
+}
+
+/**
+ * Send a message. `sender` is never sent — the column defaults to and is
+ * constrained to 'user', so there is nothing else it could be from a client.
+ * Silently a no-op for threads that only exist locally (see above); the
+ * caller does not need to branch on that, since the thread already carries
+ * its own full message history on-device either way.
+ */
+export async function sendMessage(input: {
+  threadId: string;
+  text: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; kept on this device only.' };
+  const { error } = await supabase.from('messages').insert({ thread_id: input.threadId, body: input.text });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

@@ -38,6 +38,8 @@ function Shell() {
         <Stack.Screen name="review/new" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="events/index" />
         <Stack.Screen name="collection/[id]" />
+        <Stack.Screen name="messages/index" />
+        <Stack.Screen name="messages/[id]" />
         <Stack.Screen name="auth" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
       </Stack>

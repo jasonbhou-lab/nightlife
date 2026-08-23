@@ -29,7 +29,9 @@ export default function VenueProfile() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { now, isSaved, toggleSave, session, canBook, attemptContribution } = useApp();
+  const {
+    now, isSaved, toggleSave, session, canBook, attemptContribution, startThread,
+  } = useApp();
   const {
     venues, getVenue, venueReviews, filteredCount, eventsForVenue,
   } = useCatalogue();
@@ -136,6 +138,24 @@ export default function VenueProfile() {
       default:
         return;
     }
+  };
+
+  const openThread = async (kind: 'general' | 'quote_request') => {
+    if (!canBook) {
+      // Same gate as booking: PRD 2.4 requires a verified account (R3) to
+      // message a business, not merely a registered one (R2).
+      Alert.alert(
+        'Verification required to message a venue',
+        'Messaging a venue requires a confirmed phone number and age verification. Browsing does not.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Verify', onPress: () => router.push('/auth') },
+        ],
+      );
+      return;
+    }
+    const threadId = await startThread(venue.id, kind, kind === 'quote_request' ? 'Private event / buyout inquiry' : undefined);
+    router.push(`/messages/${threadId}`);
   };
 
   const writeReview = () => {
@@ -683,6 +703,37 @@ export default function VenueProfile() {
               </View>
             </>
           ) : null}
+        </Card>
+      </View>
+
+      {/* F-MSG: message the venue directly, or send a structured private-event
+          request. R3 (verified) is required, same as booking. */}
+      <View style={gutter()}>
+        <SectionHeader title="Message this venue" />
+        <Card>
+          <View style={[ui.row, { gap: space.md }]}>
+            <IconBadge icon="chatbubbles" size={38} />
+            <View style={{ flex: 1 }}>
+              <Text style={[font.bodyStrong, { color: theme.text }]}>
+                {venue.avgResponseMinutes
+                  ? `Usually responds within ${
+                      venue.avgResponseMinutes < 60
+                        ? `${venue.avgResponseMinutes} min`
+                        : venue.avgResponseMinutes < 24 * 60
+                          ? `${Math.round(venue.avgResponseMinutes / 60)} hr`
+                          : `${Math.round(venue.avgResponseMinutes / (24 * 60))} days`
+                    }`
+                  : 'Response time not published'}
+              </Text>
+              <Body dim style={{ marginTop: 2 }}>
+                Nothing is charged and no commitment is created by messaging.
+              </Body>
+            </View>
+          </View>
+          <View style={[ui.row, { gap: space.sm, marginTop: space.lg, flexWrap: 'wrap' }]}>
+            <Button label="Message" icon="chatbubble" variant="secondary" onPress={() => openThread('general')} />
+            <Button label="Request a quote" icon="calendar" variant="secondary" onPress={() => openThread('quote_request')} />
+          </View>
         </Card>
       </View>
 

@@ -247,6 +247,49 @@ export type Venue = {
   qa: { q: string; a: string; byOwner: boolean; date: string }[];
   /** Community rating dimensions specific to the category. */
   subRatingAverages: Partial<Record<SubRatingKey, number>>;
+  /** F-MSG-01: published response-time metric. Absent means not published. */
+  avgResponseMinutes?: number;
+};
+
+/* --------------------------------------------------------------- messaging */
+
+/**
+ * F-MSG. Consumer-to-business only (F-MSG-05 defers consumer-to-consumer).
+ *
+ * `sender` is always 'user': there is no business portal in this build, so
+ * there is no authenticated party on the venue side who could write a reply.
+ * The database enforces this (messages.sender is constrained to 'user'), so
+ * the type does the same rather than modelling a reply that can never exist.
+ */
+export type MessageThreadKind = 'general' | 'quote_request';
+
+export type Message = {
+  id: string;
+  sender: 'user';
+  text: string;
+  createdAt: string;
+};
+
+/** F-MSG-03: structured intake for a private event, buyout, or large party. */
+export type QuoteIntake = {
+  date?: string;
+  headcount?: number;
+  budgetRange?: string;
+  foodAndBeverage?: string;
+  av?: string;
+};
+
+export type MessageThread = {
+  id: string;
+  venueId: string;
+  kind: MessageThreadKind;
+  subject?: string;
+  intake?: QuoteIntake;
+  /** F-MSG-04: a blocked thread accepts no further messages. */
+  blocked: boolean;
+  createdAt: string;
+  lastMessageAt: string;
+  messages: Message[];
 };
 
 /* ---------------------------------------------------------------- app state */

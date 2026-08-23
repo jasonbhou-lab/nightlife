@@ -36,6 +36,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Social | F-SOCIAL-01, 03, 06, 07 |
 | Booking | F-BOOK-01 through 04, 06, 09, 09a, 10, 11 |
 | Events | F-EVENT-01 through 06 |
+| Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
 | Usability | U-01 through U-12 |
 
@@ -86,11 +87,17 @@ reviewer trust, and detail, and the plain-language explanation of that is publis
 category, and in Tonight they surface as a Bar before 11 PM and as a Lounge after, since dwell
 rises later. The rule is stated in the UI rather than left implicit.
 
+**Messaging** (`app/messages/`). Consumer-to-business only, per F-MSG-05's deferral of
+consumer-to-consumer messaging. There is no business portal in this build, so nothing here
+invents a reply "from the venue" — the venue side of the conversation is real or it does not
+appear. What is real: the venue's published response time (F-MSG-01, `venues.avg_response_minutes`),
+a structured intake form for private-event and buyout requests (F-MSG-03), and abuse controls
+(F-MSG-04) — a client-side rate-limit courtesy backed by a database trigger that is the actual
+control, plus block and report. Every message thread is verified-account-only (R3), the same gate
+as booking, since the PRD's permission matrix requires it.
+
 ## What is deliberately not implemented
 
-- **A backend that is wired but not yet provisioned.** The Supabase schema, RLS policies, seed,
-  and client are all in the repo (see *Backend* below), but the project itself has not had the
-  migration applied yet, so the app runs on the bundled seed until it does.
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
   No card fields exist anywhere in the app.
 - **No real authentication.** Sign-in collects a display name and a phone number and creates
@@ -102,7 +109,8 @@ rises later. The rule is stated in the UI rather than left implicit.
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner responses, owner-answer badges,
   paid-placement labels, claimed/unclaimed states, closure and successor handling.
-- **Messaging** (F-MSG). Inquiry and request forms route and confirm, but there is no thread view.
+- **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
+  configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery
   rule is stated; checkout is not built.
 - **Photography.** The app bundles no images. `PhotoTile` renders a deterministic gradient plus
@@ -167,6 +175,9 @@ presentation only. So:
 - Bookings, collections, and drafts are readable and writable only by their owner. Shared
   collections are readable by link, which is the one deliberate exception.
 - A deposit cannot be recorded without the terms acceptance that F-BOOK-11 requires.
+- A message thread's `sender` column is constrained to `'user'` at the schema level, and a rate
+  limit (5 seconds per thread, 40 per account per hour) is enforced by trigger, not just by the
+  composer disabling Send (F-MSG-04, NFR-11).
 
 One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
 enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus

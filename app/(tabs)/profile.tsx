@@ -24,7 +24,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const {
     session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
-    bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now,
+    bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
   } = useApp();
   const { reviews, venueById, source } = useCatalogue();
 
@@ -200,6 +200,26 @@ export default function ProfileScreen() {
               </Card>
             );
           })}
+        </View>
+      ) : null}
+
+      {/* F-MSG: conversations with venues. */}
+      {threads.length ? (
+        <View style={gutter()}>
+          <SectionHeader title="Messages" subtitle={`${threads.length} conversation${threads.length === 1 ? '' : 's'}`} actionLabel="All" onAction={() => router.push('/messages')} />
+          <Card onPress={() => router.push('/messages')}>
+            <View style={[ui.row, { gap: space.md }]}>
+              <IconBadge icon="chatbubbles" size={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={[font.cardTitle, { color: theme.text }]}>
+                  {threads.filter((t) => !t.blocked).length} open conversation
+                  {threads.filter((t) => !t.blocked).length === 1 ? '' : 's'}
+                </Text>
+                <Body dim style={{ marginTop: 2 }}>Tap to see them all</Body>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
+            </View>
+          </Card>
         </View>
       ) : null}
 

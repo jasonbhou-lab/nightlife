@@ -42,6 +42,8 @@ export const venues: Venue[] = [
   /* ==================================================== DINING ========= */
   {
     id: 'vela',
+    /** F-MSG-01: published response time. Front-of-house checks messages on shift. */
+    avgResponseMinutes: 25,
     name: 'Vela Steak & Raw',
     primary: { vertical: 'dining', category: 'Steakhouse' },
     secondary: [
@@ -412,6 +414,7 @@ export const venues: Venue[] = [
   },
   {
     id: 'kirby3',
+    avgResponseMinutes: 12,
     name: 'Kirby & Third',
     primary: { vertical: 'bar', category: 'Sports Bar' },
     secondary: [{ vertical: 'bar', category: 'Neighborhood Bar' }],
@@ -535,6 +538,7 @@ export const venues: Venue[] = [
   },
   {
     id: 'cistern',
+    avgResponseMinutes: 90,
     name: 'Cistern Brewing Co.',
     primary: { vertical: 'bar', category: 'Brewery Taproom' },
     secondary: [{ vertical: 'bar', category: 'Beer Garden' }],
@@ -658,6 +662,7 @@ export const venues: Venue[] = [
   },
   {
     id: 'bramble',
+    avgResponseMinutes: 40,
     name: 'Bramble & Bloom',
     primary: { vertical: 'bar', category: 'Cocktail Bar' },
     secondary: [{ vertical: 'lounge', category: 'Cocktail Lounge' }],
@@ -725,6 +730,7 @@ export const venues: Venue[] = [
   /* ===================================================== LOUNGES ======== */
   {
     id: 'verso',
+    avgResponseMinutes: 20,
     name: 'Verso Rooftop',
     primary: { vertical: 'lounge', category: 'Rooftop Lounge' },
     secondary: [
@@ -813,6 +819,7 @@ export const venues: Venue[] = [
   },
   {
     id: 'quietpart',
+    avgResponseMinutes: 35,
     name: 'The Quiet Part',
     primary: { vertical: 'lounge', category: 'Speakeasy' },
     secondary: [{ vertical: 'lounge', category: 'Piano Lounge' }],
@@ -964,6 +971,7 @@ export const venues: Venue[] = [
   /* ====================================================== CIGAR ========= */
   {
     id: 'ashenoak',
+    avgResponseMinutes: 300,
     name: 'Ashen Oak Cigar Lounge',
     primary: { vertical: 'cigar', category: 'Cigar Bar' },
     secondary: [{ vertical: 'lounge', category: 'Cocktail Lounge' }],
@@ -1172,6 +1180,7 @@ export const venues: Venue[] = [
   /* ================================================== NIGHTCLUBS ======== */
   {
     id: 'kosmos',
+    avgResponseMinutes: 15,
     name: 'Kósmos',
     primary: { vertical: 'nightclub', category: 'EDM Club' },
     secondary: [{ vertical: 'nightclub', category: 'Dance Club' }],

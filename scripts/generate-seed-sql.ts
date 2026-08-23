@@ -118,7 +118,8 @@ const venueRow = (v: Venue, withSuccessor: boolean) => `(
   ${j(v.subRatingAverages)},
   ${j(v.busyness ?? {})},
   ${enumArr(v.bookingModes, 'booking_mode')},
-  ${q(v.bookingTerms)}
+  ${q(v.bookingTerms)},
+  ${n(v.avgResponseMinutes)}
 )`;
 
 const venueCols = `insert into venues (
@@ -127,7 +128,8 @@ const venueCols = `insert into venues (
   review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
-  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms
+  photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
+  avg_response_minutes
 ) values`;
 
 const VENUE_UPSERT = `on conflict (id) do update set
@@ -166,7 +168,8 @@ const VENUE_UPSERT = `on conflict (id) do update set
   sub_rating_averages = excluded.sub_rating_averages,
   busyness = excluded.busyness,
   booking_modes = excluded.booking_modes,
-  booking_terms = excluded.booking_terms;`;
+  booking_terms = excluded.booking_terms,
+  avg_response_minutes = excluded.avg_response_minutes;`;
 
 for (const batch of chunk(venues, 4)) {
   lines.push(venueCols);

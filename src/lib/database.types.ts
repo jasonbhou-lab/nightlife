@@ -27,6 +27,7 @@ export type BookingModeEnum =
   | 'reservation' | 'table_service' | 'waitlist' | 'bar_hold' | 'inquiry' | 'walk_in';
 export type BookingStatusEnum = 'confirmed' | 'requested' | 'waitlisted' | 'cancelled';
 export type ClosureStateEnum = 'temporary' | 'permanent' | 'moved' | 'seasonal';
+export type MessageThreadKindEnum = 'general' | 'quote_request';
 
 export type VenueRow = {
   id: string;
@@ -69,6 +70,8 @@ export type VenueRow = {
   busyness: Json;
   booking_modes: BookingModeEnum[];
   booking_terms: string | null;
+  /** F-MSG-01: published response-time metric, shown on the profile and composer. */
+  avg_response_minutes: number | null;
   search_text: string | null;
   created_at: string;
   updated_at: string;
@@ -185,6 +188,27 @@ export type ReviewDraftRow = {
   saved_at: string;
 };
 
+export type MessageThreadRow = {
+  id: string;
+  user_id: string;
+  venue_id: string;
+  kind: MessageThreadKindEnum;
+  subject: string | null;
+  intake: Json;
+  blocked: boolean;
+  created_at: string;
+  last_message_at: string;
+};
+
+/** `sender` is DB-constrained to 'user' — see the messaging migration header. */
+export type MessageRow = {
+  id: string;
+  thread_id: string;
+  sender: 'user';
+  body: string;
+  created_at: string;
+};
+
 /** Insert shapes: server-defaulted and server-maintained columns are omitted. */
 type Insertable<T, Optional extends keyof T> = Omit<T, Optional> & Partial<Pick<T, Optional>>;
 
@@ -265,6 +289,21 @@ export type Database = {
         Update: Partial<{ user_id: string; venue_id: string; role: string }>;
         Relationships: [];
       };
+      message_threads: {
+        Row: MessageThreadRow;
+        Insert: Insertable<
+          MessageThreadRow,
+          'id' | 'kind' | 'subject' | 'intake' | 'blocked' | 'created_at' | 'last_message_at'
+        >;
+        Update: Partial<MessageThreadRow>;
+        Relationships: [];
+      };
+      messages: {
+        Row: MessageRow;
+        Insert: Insertable<MessageRow, 'id' | 'sender' | 'created_at'>;
+        Update: Partial<MessageRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -274,6 +313,7 @@ export type Database = {
       booking_mode: BookingModeEnum;
       booking_status: BookingStatusEnum;
       closure_state: ClosureStateEnum;
+      message_thread_kind: MessageThreadKindEnum;
     };
     CompositeTypes: Record<string, never>;
   };

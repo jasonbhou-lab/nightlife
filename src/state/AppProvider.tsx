@@ -4,10 +4,12 @@ import React, {
 } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { createMessageThread, sendMessage as sendMessageRemote } from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
 import { darkTheme, lightTheme, type Theme, type ThemeMode } from '@/theme';
 import type {
-  Booking, Collection, FilterState, Preferences, ReviewDraft, SessionRole,
+  Booking, Collection, FilterState, Message, MessageThread, MessageThreadKind, Preferences,
+  QuoteIntake, ReviewDraft, SessionRole,
 } from '@/types';
 
 /**
@@ -26,6 +28,7 @@ const KEYS = {
   session: 'nightout.session.v1',
   collections: 'nightout.collections.v1',
   bookings: 'nightout.bookings.v1',
+  threads: 'nightout.threads.v1',
   drafts: 'nightout.drafts.v1',
   prefs: 'nightout.prefs.v1',
   recent: 'nightout.recent.v1',
@@ -100,6 +103,29 @@ type Ctx = {
   addBooking: (b: Booking) => void;
   cancelBooking: (id: string) => void;
 
+  /**
+   * F-MSG. `startThread` returns the new thread's id once it exists, whether
+   * that id came from the database or, offline, from this device — the
+   * caller does not need to know which. `sendThreadMessage` returns an error
+   * string rather than throwing, the same shape as the repository writes,
+   * so the composer can show *why* a send failed (blocked thread, sending
+   * too fast) instead of a generic failure.
+   */
+  threads: MessageThread[];
+  startThread: (venueId: string, kind: MessageThreadKind, subject?: string) => Promise<string>;
+  /**
+   * `intake` is applied atomically with the message, in the same state
+   * update. Setting it in a separate call right before this one is a trap:
+   * both would close over the same pre-update `threads` snapshot, and
+   * whichever write lands second would silently discard the other's change.
+   */
+  sendThreadMessage: (
+    threadId: string,
+    text: string,
+    intake?: QuoteIntake,
+  ) => { ok: true } | { ok: false; error: string };
+  blockThread: (threadId: string) => void;
+
   drafts: Record<string, ReviewDraft>;
   saveDraft: (d: ReviewDraft) => void;
   clearDraft: (venueId: string) => void;
@@ -131,6 +157,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [recentSearches, setRecent] = useState<string[]>([]);
   const [collections, setCollections] = useState<Collection[]>(DEFAULT_COLLECTIONS);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [threads, setThreads] = useState<MessageThread[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
   const [prefs, setPrefsState] = useState<Preferences>(defaultPrefs);
   const [clockOverride, setClockOverrideState] = useState<number | null>(null);
@@ -154,6 +181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSession(read<Session>(KEYS.session, defaultSession));
         setCollections(read<Collection[]>(KEYS.collections, DEFAULT_COLLECTIONS));
         setBookings(read<Booking[]>(KEYS.bookings, []));
+        setThreads(read<MessageThread[]>(KEYS.threads, []));
         setDrafts(read<Record<string, ReviewDraft>>(KEYS.drafts, {}));
         setPrefsState(read<Preferences>(KEYS.prefs, defaultPrefs));
         setRecent(read<string[]>(KEYS.recent, []));
@@ -331,6 +359,92 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [persist],
   );
 
+  /* -------------------------------------------------------------- threads */
+  const writeThreads = useCallback(
+    (next: MessageThread[]) => {
+      setThreads(next);
+      persist(KEYS.threads, next);
+    },
+    [persist],
+  );
+
+  /** A remote row id (uuid) versus a `t-<timestamp>` local-only fallback. */
+  const isRemoteId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
+
+  const startThread = useCallback(
+    async (venueId: string, kind: MessageThreadKind, subject?: string): Promise<string> => {
+      const existing = threads.find(
+        (t) => t.venueId === venueId && t.kind === kind && !t.blocked,
+      );
+      if (existing) return existing.id;
+
+      const created = await createMessageThread({ venueId, kind, subject });
+      const id = created.ok ? created.id : `t-${Date.now()}`;
+      const nowIso = new Date().toISOString();
+      const thread: MessageThread = {
+        id,
+        venueId,
+        kind,
+        subject,
+        blocked: false,
+        createdAt: nowIso,
+        lastMessageAt: nowIso,
+        messages: [],
+      };
+      writeThreads([thread, ...threads]);
+      return id;
+    },
+    [threads, writeThreads],
+  );
+
+  /**
+   * F-MSG-04 / NFR-11: the same 5-second-per-thread rate limit the database
+   * trigger enforces, checked here first so the composer can explain the
+   * rejection immediately rather than waiting on a round trip. The database
+   * remains the actual control — this is the courtesy copy of it.
+   *
+   * `intake` is folded into the same `writeThreads` call as the message,
+   * not written by a preceding call — two sequential provider calls in one
+   * event handler would each close over the same pre-update `threads`, and
+   * the second write would silently overwrite the first's change with stale
+   * data. One call, one derived array, no lost update.
+   */
+  const sendThreadMessage = useCallback(
+    (threadId: string, text: string, intake?: QuoteIntake): { ok: true } | { ok: false; error: string } => {
+      const thread = threads.find((t) => t.id === threadId);
+      if (!thread) return { ok: false, error: 'This conversation no longer exists.' };
+      if (thread.blocked) return { ok: false, error: 'This conversation is blocked and cannot receive new messages.' };
+      const trimmed = text.trim();
+      if (!trimmed) return { ok: false, error: 'Write something first.' };
+      if (thread.messages.length && Date.now() - new Date(thread.lastMessageAt).getTime() < 5_000) {
+        return { ok: false, error: 'Sending too quickly. Wait a moment before the next message.' };
+      }
+
+      const nowIso = new Date().toISOString();
+      const message: Message = { id: `m-${Date.now()}`, sender: 'user', text: trimmed, createdAt: nowIso };
+      writeThreads(
+        threads.map((t) =>
+          t.id === threadId
+            ? { ...t, ...(intake ? { intake } : null), messages: [...t.messages, message], lastMessageAt: nowIso }
+            : t,
+        ),
+      );
+
+      if (isRemoteId(threadId)) {
+        sendMessageRemote({ threadId, text: trimmed }).catch(() => {
+          /* Best-effort mirror. The message already lives on this device. */
+        });
+      }
+      return { ok: true };
+    },
+    [threads, writeThreads],
+  );
+
+  const blockThread = useCallback(
+    (threadId: string) => writeThreads(threads.map((t) => (t.id === threadId ? { ...t, blocked: true } : t))),
+    [threads, writeThreads],
+  );
+
   /* -------------------------------------------------------------- drafts */
   const saveDraft = useCallback(
     (d: ReviewDraft) => {
@@ -391,6 +505,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       bookings,
       addBooking,
       cancelBooking,
+      threads,
+      startThread,
+      sendThreadMessage,
+      blockThread,
       drafts,
       saveDraft,
       clearDraft,
@@ -404,7 +522,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, verifyAge,
       ageGateSeen, attemptContribution, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
-      removeFromCollection, deleteCollection, bookings, addBooking, cancelBooking, drafts,
+      removeFromCollection, deleteCollection, bookings, addBooking, cancelBooking,
+      threads, startThread, sendThreadMessage, blockThread, drafts,
       saveDraft, clearDraft, prefs, setPrefs, now, clockOverride,
     ],
   );
