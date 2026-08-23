@@ -1,14 +1,22 @@
 /**
  * Database types.
  *
- * Hand-authored to match supabase/migrations/20260822000100_init_schema.sql so
- * the client is typed before the project has been provisioned. Once the schema
- * is applied, replace this file wholesale with generated output:
+ * Hand-authored, then diffed against `supabase gen types` output taken from the
+ * live project after the migrations were applied: every column, nullability,
+ * and enum member matched, so these are accurate rather than aspirational.
+ *
+ * Regenerate mechanically rather than by hand whenever the schema changes:
  *
  *   npm run db:types
  *
- * Generated types are authoritative. If this file and the database disagree,
+ * Generated output is authoritative. If this file and the database disagree,
  * this file is the one that is wrong.
+ *
+ * One deliberate difference from the generated output: `Relationships` is `[]`
+ * on every table here, where the generator emits the real foreign keys. That
+ * only types PostgREST's embedded joins (`.select('*, venues(*)')`), which this
+ * app does not use — it fetches whole tables and joins on the device. Running
+ * db:types fills them in.
  */
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
