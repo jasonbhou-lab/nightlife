@@ -33,7 +33,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Venue profile | F-PROFILE-01 through 06, 07, 08, 10, 11, 12 |
 | Reviews | F-REVIEW-01 through 13 (client surface) |
 | Media | F-MEDIA-01, 02, 05, 06 (metadata and album model) |
-| Social | F-SOCIAL-01, 03, 06, 07 |
+| Social | F-SOCIAL-01 through 07 |
 | Booking | F-BOOK-01 through 04, 06, 09, 09a, 10, 11 |
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
@@ -95,6 +95,21 @@ a structured intake form for private-event and buyout requests (F-MSG-03), and a
 (F-MSG-04) — a client-side rate-limit courtesy backed by a database trigger that is the actual
 control, plus block and report. Every message thread is verified-account-only (R3), the same gate
 as booking, since the PRD's permission matrix requires it.
+
+**Following, activity, and collaborative collections** (`app/community/`, F-SOCIAL-02, 04, 05).
+"Follow users" has no real directory to search, because this build has no multi-user backend —
+the account you sign in as is the only real account on the device. Rather than fake that with an
+empty search box, the roster of followable people is the platform's own recurring reviewers
+(`src/data/community.ts`), with `trust` and `elite` copied from their actual seeded reviews so the
+two data sources cannot disagree. The activity feed (F-SOCIAL-02) is built from data that already
+exists — reviews, events, and seeded check-ins — rather than a separate feed table. Check-ins
+(F-SOCIAL-05) default to `'private'`, the explicit non-broadcast default the requirement asks for;
+`'friends'` visibility is enforced in the feed-building code, not just in what the UI happens to
+show, and one seeded check-in is `'private'` specifically to prove that filter has something to
+reject. Collections (F-SOCIAL-04) carry per-venue attribution (`addedBy`) and an invitable
+collaborator list, not just a `shared`-by-link flag with no one behind it — the seed data includes
+one collection with a contribution pre-attributed to a community member, since a fresh local-only
+collection could otherwise never show that the model supports it.
 
 ## What is deliberately not implemented
 

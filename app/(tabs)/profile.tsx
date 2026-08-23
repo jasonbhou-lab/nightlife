@@ -25,6 +25,7 @@ export default function ProfileScreen() {
   const {
     session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
+    followedMemberIds, followedVenueIds, checkIns,
   } = useApp();
   const { reviews, venueById, source } = useCatalogue();
 
@@ -93,20 +94,27 @@ export default function ProfileScreen() {
       ) : null}
 
       {/* Contribution history and badges. */}
-      <View style={[ui.row, gutter(), { gap: space.md, alignItems: 'stretch' }]}>
-        <Card style={{ flex: 1 }}>
+      <View style={[ui.row, gutter(), { gap: space.md, alignItems: 'stretch', flexWrap: 'wrap' }]}>
+        <Card style={{ flex: 1, minWidth: 140 }}>
           <View style={[ui.row, { marginBottom: space.md }]}>
             <IconBadge icon="create" size={34} />
             <Text style={[font.cardTitle, { color: theme.text, marginLeft: space.sm, flex: 1 }]}>Reviews</Text>
           </View>
           <InsetPill value={session.role === 'guest' ? '0' : '0'} caption="Written by you in this build" />
         </Card>
-        <Card style={{ flex: 1 }}>
+        <Card style={{ flex: 1, minWidth: 140 }}>
           <View style={[ui.row, { marginBottom: space.md }]}>
             <IconBadge icon="images" size={34} />
             <Text style={[font.cardTitle, { color: theme.text, marginLeft: space.sm, flex: 1 }]}>Drafts</Text>
           </View>
           <InsetPill value={`${draftList.length}`} caption="Autosaved, resume any time" tone={draftList.length ? 'warn' : 'default'} />
+        </Card>
+        <Card style={{ flex: 1, minWidth: 140 }} onPress={() => router.push('/community')}>
+          <View style={[ui.row, { marginBottom: space.md }]}>
+            <IconBadge icon="people" size={34} />
+            <Text style={[font.cardTitle, { color: theme.text, marginLeft: space.sm, flex: 1 }]}>Following</Text>
+          </View>
+          <InsetPill value={`${followedMemberIds.length + followedVenueIds.length}`} caption="People and venues" />
         </Card>
       </View>
 
@@ -220,6 +228,30 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
             </View>
           </Card>
+        </View>
+      ) : null}
+
+      {/* F-SOCIAL-05: your own check-in history. */}
+      {checkIns.length ? (
+        <View style={gutter()}>
+          <SectionHeader title="Your check-ins" subtitle="Non-broadcast unless you chose otherwise" />
+          {checkIns.slice(0, 5).map((c) => {
+            const v = venueById[c.venueId];
+            return (
+              <Card key={c.id} style={{ marginBottom: space.md }}>
+                <View style={[ui.row, { gap: space.md }]}>
+                  <IconBadge icon="location" size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[font.cardTitle, { color: theme.text }]} numberOfLines={1}>{v?.name ?? c.venueId}</Text>
+                    <Text style={[font.small, { color: theme.textDim }]}>
+                      {c.date.slice(0, 10)} · {c.visibility === 'private' ? 'Just you' : 'Visible to followers'}
+                    </Text>
+                    {c.note ? <Body dim style={{ marginTop: 4 }}>{c.note}</Body> : null}
+                  </View>
+                </View>
+              </Card>
+            );
+          })}
         </View>
       ) : null}
 

@@ -9,6 +9,7 @@ import {
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { communityByName } from '@/data/community';
 import { relativeDate } from '@/lib/format';
 import {
   aggregateFor, FILTERED_EXPLANATION, RATING_EXPLANATION, subRatingDimensions,
@@ -248,7 +249,9 @@ export default function ReviewsScreen() {
 
 function ReviewCard({ review: r, now, notCounted }: { review: Review; now: Date; notCounted?: boolean }) {
   const theme = useTheme();
+  const router = useRouter();
   const [voted, setVoted] = useState<string | null>(null);
+  const member = communityByName[r.author];
 
   return (
     <Card style={{ marginBottom: space.md, opacity: notCounted ? 0.86 : 1 }}>
@@ -262,7 +265,15 @@ function ReviewCard({ review: r, now, notCounted }: { review: Review; now: Date;
         <IconBadge icon="person" size={38} />
         <View style={{ flex: 1, marginLeft: space.md }}>
           <View style={[ui.row, { gap: space.sm, flexWrap: 'wrap' }]}>
-            <Text style={[font.bodyStrong, { color: theme.text }]}>{r.author}</Text>
+            {member ? (
+              <Pressable onPress={() => router.push(`/community/${member.id}`)} hitSlop={4}>
+                <Text style={[font.bodyStrong, { color: theme.accent, textDecorationLine: 'underline' }]}>
+                  {r.author}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={[font.bodyStrong, { color: theme.text }]}>{r.author}</Text>
+            )}
             {r.elite ? (
               <View style={{ backgroundColor: theme.accentSoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                 <Text style={[font.micro, { color: theme.accentSoftText }]}>ELITE</Text>

@@ -8,8 +8,8 @@ import { createMessageThread, sendMessage as sendMessageRemote } from '@/data/re
 import { emptyFilters } from '@/lib/search';
 import { darkTheme, lightTheme, type Theme, type ThemeMode } from '@/theme';
 import type {
-  Booking, Collection, FilterState, Message, MessageThread, MessageThreadKind, Preferences,
-  QuoteIntake, ReviewDraft, SessionRole,
+  Booking, CheckIn, CheckInVisibility, Collection, FilterState, Message, MessageThread,
+  MessageThreadKind, Preferences, QuoteIntake, ReviewDraft, SessionRole,
 } from '@/types';
 
 /**
@@ -29,6 +29,8 @@ const KEYS = {
   collections: 'nightout.collections.v1',
   bookings: 'nightout.bookings.v1',
   threads: 'nightout.threads.v1',
+  follows: 'nightout.follows.v1',
+  checkins: 'nightout.checkins.v1',
   drafts: 'nightout.drafts.v1',
   prefs: 'nightout.prefs.v1',
   recent: 'nightout.recent.v1',
@@ -56,6 +58,11 @@ const defaultSession: Session = {
   ageVerified: false,
   contributionAttempts: 0,
 };
+
+/** F-SOCIAL-02. Two separate follow lists: people (the roster) and venues. */
+type Follows = { memberIds: string[]; venueIds: string[] };
+
+const defaultFollows: Follows = { memberIds: [], venueIds: [] };
 
 const defaultPrefs: Preferences = {
   cuisines: [],
@@ -98,6 +105,21 @@ type Ctx = {
   createCollection: (name: string, venueId?: string) => Collection;
   removeFromCollection: (collectionId: string, venueId: string) => void;
   deleteCollection: (collectionId: string) => void;
+  /** F-SOCIAL-04: invite/remove a contributor. Inviting also flips `shared` on. */
+  inviteCollaborator: (collectionId: string, memberId: string) => void;
+  removeCollaborator: (collectionId: string, memberId: string) => void;
+
+  /** F-SOCIAL-02: following a person or a venue. */
+  followedMemberIds: string[];
+  followedVenueIds: string[];
+  isFollowingMember: (memberId: string) => boolean;
+  toggleFollowMember: (memberId: string) => void;
+  isFollowingVenue: (venueId: string) => boolean;
+  toggleFollowVenue: (venueId: string) => void;
+
+  /** F-SOCIAL-05: the signed-in device's own check-ins. */
+  checkIns: CheckIn[];
+  addCheckIn: (venueId: string, visibility: CheckInVisibility, note?: string) => CheckIn;
 
   bookings: Booking[];
   addBooking: (b: Booking) => void;
@@ -141,9 +163,31 @@ type Ctx = {
 
 const AppContext = createContext<Ctx | null>(null);
 
+// The second collection's "quietpart" entry is attributed to Dana R. (a
+// roster community member, not "you") on purpose — it demonstrates the
+// F-SOCIAL-04 attribution model with a contribution that predates this
+// session, which a brand-new local-only collection could otherwise never show.
 const DEFAULT_COLLECTIONS: Collection[] = [
-  { id: 'c-1', name: 'Cigar spots in Houston', venueIds: ['ashenoak', 'bayouleaf'], shared: false },
-  { id: 'c-2', name: 'Anniversary dinner shortlist', venueIds: ['vela', 'quietpart'], shared: true },
+  {
+    id: 'c-1',
+    name: 'Cigar spots in Houston',
+    entries: [
+      { venueId: 'ashenoak', addedBy: 'you', addedAt: '2026-08-10T12:00:00Z' },
+      { venueId: 'bayouleaf', addedBy: 'you', addedAt: '2026-08-10T12:05:00Z' },
+    ],
+    shared: false,
+    collaboratorIds: [],
+  },
+  {
+    id: 'c-2',
+    name: 'Anniversary dinner shortlist',
+    entries: [
+      { venueId: 'vela', addedBy: 'you', addedAt: '2026-08-05T12:00:00Z' },
+      { venueId: 'quietpart', addedBy: 'cm-dana', addedAt: '2026-08-06T09:30:00Z' },
+    ],
+    shared: true,
+    collaboratorIds: ['cm-dana'],
+  },
 ];
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -158,6 +202,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [collections, setCollections] = useState<Collection[]>(DEFAULT_COLLECTIONS);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [threads, setThreads] = useState<MessageThread[]>([]);
+  const [follows, setFollows] = useState<Follows>(defaultFollows);
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
   const [prefs, setPrefsState] = useState<Preferences>(defaultPrefs);
   const [clockOverride, setClockOverrideState] = useState<number | null>(null);
@@ -179,9 +225,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
         setThemeSettingState(read<ThemeSetting>(KEYS.theme, 'system'));
         setSession(read<Session>(KEYS.session, defaultSession));
-        setCollections(read<Collection[]>(KEYS.collections, DEFAULT_COLLECTIONS));
+        // Collections gained `entries`/`collaboratorIds` in place of a bare
+        // `venueIds` array. A collection persisted before that change reads
+        // back with no `entries` at all, so it is migrated in place rather
+        // than left to crash the first time something calls `.map` on it.
+        const rawCollections = read<(Collection & { venueIds?: string[] })[]>(
+          KEYS.collections,
+          DEFAULT_COLLECTIONS,
+        );
+        setCollections(
+          rawCollections.map((c) =>
+            c.entries
+              ? c
+              : {
+                  ...c,
+                  entries: (c.venueIds ?? []).map((venueId) => ({
+                    venueId,
+                    addedBy: 'you',
+                    addedAt: new Date(0).toISOString(),
+                  })),
+                  collaboratorIds: c.collaboratorIds ?? [],
+                },
+          ),
+        );
         setBookings(read<Booking[]>(KEYS.bookings, []));
         setThreads(read<MessageThread[]>(KEYS.threads, []));
+        setFollows(read<Follows>(KEYS.follows, defaultFollows));
+        setCheckIns(read<CheckIn[]>(KEYS.checkins, []));
         setDrafts(read<Record<string, ReviewDraft>>(KEYS.drafts, {}));
         setPrefsState(read<Preferences>(KEYS.prefs, defaultPrefs));
         setRecent(read<string[]>(KEYS.recent, []));
@@ -287,7 +357,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const isSaved = useCallback(
-    (venueId: string) => collections.some((c) => c.venueIds.includes(venueId)),
+    (venueId: string) => collections.some((c) => c.entries.some((e) => e.venueId === venueId)),
     [collections],
   );
 
@@ -295,12 +365,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (venueId: string, collectionId?: string) => {
       const target = collectionId ?? collections[0]?.id;
       if (!target) return;
-      const already = collections.some((c) => c.venueIds.includes(venueId));
+      const already = collections.some((c) => c.entries.some((e) => e.venueId === venueId));
       const next = collections.map((c) => {
-        if (already) return { ...c, venueIds: c.venueIds.filter((v) => v !== venueId) };
-        return c.id === target && !c.venueIds.includes(venueId)
-          ? { ...c, venueIds: [venueId, ...c.venueIds] }
-          : c;
+        if (already) return { ...c, entries: c.entries.filter((e) => e.venueId !== venueId) };
+        if (c.id !== target || c.entries.some((e) => e.venueId === venueId)) return c;
+        const entry = { venueId, addedBy: 'you', addedAt: new Date().toISOString() };
+        return { ...c, entries: [entry, ...c.entries] };
       });
       writeCollections(next);
     },
@@ -312,8 +382,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const c: Collection = {
         id: `c-${Date.now()}`,
         name: name.trim() || 'New collection',
-        venueIds: venueId ? [venueId] : [],
+        entries: venueId ? [{ venueId, addedBy: 'you', addedAt: new Date().toISOString() }] : [],
         shared: false,
+        collaboratorIds: [],
       };
       writeCollections([c, ...collections]);
       return c;
@@ -325,7 +396,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (collectionId: string, venueId: string) =>
       writeCollections(
         collections.map((c) =>
-          c.id === collectionId ? { ...c, venueIds: c.venueIds.filter((v) => v !== venueId) } : c,
+          c.id === collectionId ? { ...c, entries: c.entries.filter((e) => e.venueId !== venueId) } : c,
         ),
       ),
     [collections, writeCollections],
@@ -333,6 +404,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCollection = useCallback(
     (collectionId: string) => writeCollections(collections.filter((c) => c.id !== collectionId)),
+    [collections, writeCollections],
+  );
+
+  /** F-SOCIAL-04: inviting a contributor also flips `shared` on — a
+   * collection with a collaborator is definitionally no longer private-only. */
+  const inviteCollaborator = useCallback(
+    (collectionId: string, memberId: string) =>
+      writeCollections(
+        collections.map((c) =>
+          c.id === collectionId && !c.collaboratorIds.includes(memberId)
+            ? { ...c, collaboratorIds: [...c.collaboratorIds, memberId], shared: true }
+            : c,
+        ),
+      ),
+    [collections, writeCollections],
+  );
+
+  const removeCollaborator = useCallback(
+    (collectionId: string, memberId: string) =>
+      writeCollections(
+        collections.map((c) =>
+          c.id === collectionId
+            ? { ...c, collaboratorIds: c.collaboratorIds.filter((m) => m !== memberId) }
+            : c,
+        ),
+      ),
     [collections, writeCollections],
   );
 
@@ -445,6 +542,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [threads, writeThreads],
   );
 
+  /* -------------------------------------------------------------- follows */
+  const writeFollows = useCallback(
+    (next: Follows) => {
+      setFollows(next);
+      persist(KEYS.follows, next);
+    },
+    [persist],
+  );
+
+  const isFollowingMember = useCallback(
+    (memberId: string) => follows.memberIds.includes(memberId),
+    [follows],
+  );
+
+  const toggleFollowMember = useCallback(
+    (memberId: string) => {
+      writeFollows({
+        ...follows,
+        memberIds: follows.memberIds.includes(memberId)
+          ? follows.memberIds.filter((m) => m !== memberId)
+          : [...follows.memberIds, memberId],
+      });
+    },
+    [follows, writeFollows],
+  );
+
+  const isFollowingVenue = useCallback(
+    (venueId: string) => follows.venueIds.includes(venueId),
+    [follows],
+  );
+
+  const toggleFollowVenue = useCallback(
+    (venueId: string) => {
+      writeFollows({
+        ...follows,
+        venueIds: follows.venueIds.includes(venueId)
+          ? follows.venueIds.filter((v) => v !== venueId)
+          : [...follows.venueIds, venueId],
+      });
+    },
+    [follows, writeFollows],
+  );
+
+  /* ------------------------------------------------------------ check-ins */
+  const addCheckIn = useCallback(
+    (venueId: string, visibility: CheckInVisibility, note?: string): CheckIn => {
+      const checkIn: CheckIn = { id: `ci-${Date.now()}`, venueId, date: new Date().toISOString(), visibility, note };
+      setCheckIns((prev) => {
+        const next = [checkIn, ...prev];
+        persist(KEYS.checkins, next);
+        return next;
+      });
+      return checkIn;
+    },
+    [persist],
+  );
+
   /* -------------------------------------------------------------- drafts */
   const saveDraft = useCallback(
     (d: ReviewDraft) => {
@@ -502,6 +656,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       createCollection,
       removeFromCollection,
       deleteCollection,
+      inviteCollaborator,
+      removeCollaborator,
+      followedMemberIds: follows.memberIds,
+      followedVenueIds: follows.venueIds,
+      isFollowingMember,
+      toggleFollowMember,
+      isFollowingVenue,
+      toggleFollowVenue,
+      checkIns,
+      addCheckIn,
       bookings,
       addBooking,
       cancelBooking,
@@ -522,7 +686,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, verifyAge,
       ageGateSeen, attemptContribution, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
-      removeFromCollection, deleteCollection, bookings, addBooking, cancelBooking,
+      removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
+      follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,
+      checkIns, addCheckIn, bookings, addBooking, cancelBooking,
       threads, startThread, sendThreadMessage, blockThread, drafts,
       saveDraft, clearDraft, prefs, setPrefs, now, clockOverride,
     ],

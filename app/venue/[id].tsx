@@ -12,6 +12,7 @@ import {
   ScreenHeader, SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { communityByName } from '@/data/community';
 import { verticalMeta } from '@/data/taxonomy';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { actionsFor, categoryLine, freshness, metaFor, priceLabel, relativeDate } from '@/lib/format';
@@ -31,6 +32,7 @@ export default function VenueProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     now, isSaved, toggleSave, session, canBook, attemptContribution, startThread,
+    isFollowingVenue, toggleFollowVenue, addCheckIn,
   } = useApp();
   const {
     venues, getVenue, venueReviews, filteredCount, eventsForVenue,
@@ -173,6 +175,42 @@ export default function VenueProfile() {
     }
     router.push({ pathname: '/review/new', params: { id: venue.id } });
   };
+
+  // F-SOCIAL-02 / F-SOCIAL-05. Following and checking in are R2 capabilities
+  // per the PRD's role list (2.1) — lighter than the R3 gate on booking and
+  // messaging, so a registered-but-unverified account can do both.
+  const requireAccount = (action: () => void) => {
+    const gate = attemptContribution();
+    if (session.role === 'guest') {
+      Alert.alert(
+        gate === 'soft_wall' ? 'Sign in to keep going' : 'This needs an account',
+        'Following and checking in need an account. Reading and browsing do not.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Sign in', onPress: () => router.push('/auth') },
+        ],
+      );
+      return;
+    }
+    action();
+  };
+
+  const following = isFollowingVenue(venue.id);
+
+  const checkIn = () =>
+    requireAccount(() =>
+      Alert.alert(`Check in at ${venue.name}?`, 'Who can see this?', [
+        {
+          text: 'Just me',
+          onPress: () => addCheckIn(venue.id, 'private'),
+        },
+        {
+          text: 'Followers can see it',
+          onPress: () => addCheckIn(venue.id, 'friends'),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]),
+    );
 
   return (
     <Screen contentStyle={{ gap: space.xl }}>
@@ -343,6 +381,18 @@ export default function VenueProfile() {
                 onPress={() => runAction(a.key)}
               />
             ))}
+          </View>
+
+          {/* F-SOCIAL-02 / F-SOCIAL-05: lighter-weight than booking, so they
+              sit apart from the primary action set above rather than in it. */}
+          <View style={[ui.row, { gap: space.sm, marginTop: space.md, flexWrap: 'wrap' }]}>
+            <Button
+              label={following ? 'Following updates' : 'Follow for updates'}
+              icon={following ? 'notifications' : 'notifications-outline'}
+              variant="ghost"
+              onPress={() => requireAccount(() => toggleFollowVenue(venue.id))}
+            />
+            <Button label="Check in" icon="location-outline" variant="ghost" onPress={checkIn} />
           </View>
 
           {/* Never a dead Reserve button (F-BOOK-09a). */}
@@ -601,7 +651,15 @@ export default function VenueProfile() {
               <IconBadge icon="person" size={38} />
               <View style={{ flex: 1, marginLeft: space.md }}>
                 <View style={[ui.row, { gap: space.sm }]}>
-                  <Text style={[font.bodyStrong, { color: theme.text }]}>{r.author}</Text>
+                  {communityByName[r.author] ? (
+                    <Pressable onPress={() => router.push(`/community/${communityByName[r.author].id}`)} hitSlop={4}>
+                      <Text style={[font.bodyStrong, { color: theme.accent, textDecorationLine: 'underline' }]}>
+                        {r.author}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[font.bodyStrong, { color: theme.text }]}>{r.author}</Text>
+                  )}
                   {r.elite ? (
                     <View style={{ backgroundColor: theme.accentSoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                       <Text style={[font.micro, { color: theme.accentSoftText }]}>ELITE</Text>

@@ -26,7 +26,7 @@ export default function SavedScreen() {
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const total = collections.reduce((n, c) => n + c.venueIds.length, 0);
+  const total = collections.reduce((n, c) => n + c.entries.length, 0);
   const activeBookings = bookings.filter((b) => b.status !== 'cancelled');
 
   return (
@@ -138,7 +138,7 @@ export default function SavedScreen() {
           />
         ) : (
           collections.map((c) => {
-            const list = c.venueIds.map((id) => venueById[id]).filter(Boolean);
+            const list = c.entries.map((e) => venueById[e.venueId]).filter(Boolean);
             const openCount = list.filter((v) => venueState(v, now).open).length;
             return (
               <Card key={c.id} style={{ marginBottom: space.md }} padded={false}>
@@ -148,12 +148,16 @@ export default function SavedScreen() {
                   accessibilityLabel={`${c.name}, ${list.length} venues, ${openCount} open now`}
                   style={{ flexDirection: 'row', alignItems: 'center', padding: space.lg, gap: space.md }}
                 >
-                  <IconBadge icon={c.shared ? 'people' : 'lock-closed'} size={44} />
+                  <IconBadge icon={c.collaboratorIds.length ? 'people' : c.shared ? 'link' : 'lock-closed'} size={44} />
                   <View style={{ flex: 1 }}>
                     <Text style={[font.cardTitle, { color: theme.text }]} numberOfLines={1}>{c.name}</Text>
                     <Text style={[font.meta, { color: theme.textDim }]}>
                       {list.length} {list.length === 1 ? 'venue' : 'venues'} · {openCount} open now
-                      {c.shared ? ' · shared by link' : ''}
+                      {c.collaboratorIds.length
+                        ? ` · ${c.collaboratorIds.length} ${c.collaboratorIds.length === 1 ? 'collaborator' : 'collaborators'}`
+                        : c.shared
+                          ? ' · shared by link'
+                          : ''}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={theme.textFaint} />

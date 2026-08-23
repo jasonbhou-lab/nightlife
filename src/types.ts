@@ -292,6 +292,44 @@ export type MessageThread = {
   messages: Message[];
 };
 
+/* ---------------------------------------------------------------- community */
+
+/**
+ * F-SOCIAL-02. A followable person, distinct from the local session.
+ *
+ * This build has no real multi-user backend — the account you're signed in
+ * as is the only real account on the device, and review authorship is a
+ * free-text name with no stable id (see `Review.author`). "Follow users"
+ * is modelled here as a fixed roster of recurring contributors drawn from
+ * the seed review corpus, so following someone has real history (their
+ * existing reviews) to show rather than an empty profile. `trust` and
+ * `elite` are copied from that person's actual seeded review rather than
+ * invented, so the two data sources cannot disagree.
+ */
+export type CommunityMember = {
+  id: string;
+  name: string;
+  tagline: string;
+  homeNeighborhood: string;
+  joinedYear: number;
+  trust: number;
+  elite: boolean;
+};
+
+/** F-SOCIAL-05. Non-broadcast ('private') is the explicit default. */
+export type CheckInVisibility = 'private' | 'friends';
+
+export type CheckIn = {
+  id: string;
+  venueId: string;
+  /** ISO date. */
+  date: string;
+  visibility: CheckInVisibility;
+  note?: string;
+  /** Set on seeded community activity; absent on the signed-in user's own check-ins. */
+  memberId?: string;
+};
+
 /* ---------------------------------------------------------------- app state */
 
 export type SessionRole = 'guest' | 'registered' | 'verified' | 'elite';
@@ -314,11 +352,26 @@ export type Booking = {
   waitMinutes?: number;
 };
 
+/**
+ * F-SOCIAL-04. `addedBy` is `'you'` for the signed-in device or a
+ * `CommunityMember.id` — the attribution the requirement actually asks for.
+ * Real simultaneous multi-device editing needs a backend this build does not
+ * have; the seed data demonstrates the model with a couple of entries
+ * pre-attributed to a community member, as if they had contributed earlier.
+ */
+export type CollectionEntry = {
+  venueId: string;
+  addedBy: string;
+  addedAt: string;
+};
+
 export type Collection = {
   id: string;
   name: string;
-  venueIds: string[];
+  entries: CollectionEntry[];
   shared: boolean;
+  /** Community members invited as contributors (F-SOCIAL-04). */
+  collaboratorIds: string[];
 };
 
 export type ReviewDraft = {

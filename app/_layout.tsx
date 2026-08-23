@@ -40,6 +40,8 @@ function Shell() {
         <Stack.Screen name="collection/[id]" />
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
+        <Stack.Screen name="community/index" />
+        <Stack.Screen name="community/[id]" />
         <Stack.Screen name="auth" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
       </Stack>
