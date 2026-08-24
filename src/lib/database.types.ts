@@ -28,6 +28,9 @@ export type BookingModeEnum =
 export type BookingStatusEnum = 'confirmed' | 'requested' | 'waitlisted' | 'cancelled';
 export type ClosureStateEnum = 'temporary' | 'permanent' | 'moved' | 'seasonal';
 export type MessageThreadKindEnum = 'general' | 'quote_request';
+export type PhotoAlbumEnum =
+  | 'food' | 'drink' | 'interior' | 'exterior' | 'menu' | 'crowd' | 'humidor' | 'stage' | 'table';
+export type PhotoCreditEnum = 'owner' | 'community';
 
 export type VenueRow = {
   id: string;
@@ -209,6 +212,29 @@ export type MessageRow = {
   created_at: string;
 };
 
+export type PhotoRow = {
+  id: string;
+  venue_id: string;
+  uploaded_by: string;
+  album: PhotoAlbumEnum;
+  caption: string | null;
+  /** Trigger-filled when blank — never required from the client. */
+  alt: string | null;
+  storage_path: string;
+  /** Server-computed from business_roles; never trusted from the client. */
+  by: PhotoCreditEnum;
+  removal_requested: boolean;
+  created_at: string;
+};
+
+export type PhotoRemovalRequestRow = {
+  id: string;
+  photo_id: string;
+  requested_by: string;
+  reason: string;
+  created_at: string;
+};
+
 /** Insert shapes: server-defaulted and server-maintained columns are omitted. */
 type Insertable<T, Optional extends keyof T> = Omit<T, Optional> & Partial<Pick<T, Optional>>;
 
@@ -304,6 +330,18 @@ export type Database = {
         Update: Partial<MessageRow>;
         Relationships: [];
       };
+      photos: {
+        Row: PhotoRow;
+        Insert: Insertable<PhotoRow, 'id' | 'alt' | 'by' | 'removal_requested' | 'created_at'>;
+        Update: Partial<PhotoRow>;
+        Relationships: [];
+      };
+      photo_removal_requests: {
+        Row: PhotoRemovalRequestRow;
+        Insert: Insertable<PhotoRemovalRequestRow, 'id' | 'created_at'>;
+        Update: Partial<PhotoRemovalRequestRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -314,6 +352,8 @@ export type Database = {
       booking_status: BookingStatusEnum;
       closure_state: ClosureStateEnum;
       message_thread_kind: MessageThreadKindEnum;
+      photo_album: PhotoAlbumEnum;
+      photo_credit: PhotoCreditEnum;
     };
     CompositeTypes: Record<string, never>;
   };

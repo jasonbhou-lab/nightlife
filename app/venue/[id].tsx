@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
+import { requestPhotoRemoval } from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { actionsFor, categoryLine, freshness, metaFor, priceLabel, relativeDate } from '@/lib/format';
@@ -211,6 +212,26 @@ export default function VenueProfile() {
         { text: 'Cancel', style: 'cancel' },
       ]),
     );
+
+  const addPhoto = () => requireAccount(() => router.push(`/photo/new?venueId=${venue.id}`));
+
+  const requestRemoval = (photo: Photo) =>
+    requireAccount(() =>
+      Alert.alert('Report this photo', 'Choose the reason that fits', [
+        { text: "I'm in this photo and want it removed", onPress: () => fileRemoval(photo.id, 'subject_removal') },
+        { text: 'Inappropriate content', onPress: () => fileRemoval(photo.id, 'inappropriate') },
+        { text: 'Wrong venue or mislabeled', onPress: () => fileRemoval(photo.id, 'mislabeled') },
+        { text: 'Cancel', style: 'cancel' },
+      ]),
+    );
+
+  const fileRemoval = async (photoId: string, reason: string) => {
+    const result = await requestPhotoRemoval({ photoId, reason });
+    Alert.alert(
+      result.ok ? 'Request sent' : 'Could not send the request',
+      result.ok ? "We've recorded it." : result.error,
+    );
+  };
 
   return (
     <Screen contentStyle={{ gap: space.xl }}>
@@ -508,6 +529,8 @@ export default function VenueProfile() {
         <SectionHeader
           title="Photos"
           subtitle={`${venue.photos.filter((p) => p.by === 'owner').length} from the owner, ${venue.photos.filter((p) => p.by === 'community').length} from the community`}
+          actionLabel="Add"
+          onAction={() => addPhoto()}
         />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: space.md }}>
           <View style={[ui.row, { gap: space.sm }]}>
@@ -520,7 +543,13 @@ export default function VenueProfile() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={[ui.row, { gap: space.sm }]}>
             {photos.map((p) => (
-              <PhotoTile key={p.id} photo={p} width={200} height={150} />
+              <PhotoTile
+                key={p.id}
+                photo={p}
+                width={200}
+                height={150}
+                onRequestRemoval={p.uri ? () => requestRemoval(p) : undefined}
+              />
             ))}
           </View>
         </ScrollView>

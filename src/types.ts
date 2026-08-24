@@ -92,6 +92,14 @@ export type Photo = {
   by: 'owner' | 'community';
   /** Auto-generated for community photos, owner-editable for owner photos (5.4). */
   alt: string;
+  /**
+   * A real uploaded image's public URL (F-MEDIA-01). Absent on the seeded
+   * placeholder photos, which render as a deterministic gradient instead —
+   * see `PhotoTile`.
+   */
+  uri?: string;
+  /** F-MEDIA-04: a removal request exists for this photo. */
+  removalRequested?: boolean;
 };
 
 export type MenuItem = {

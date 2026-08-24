@@ -32,7 +32,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Search and discovery | F-SEARCH-01 through 07, 09, 10, 11 |
 | Venue profile | F-PROFILE-01 through 06, 07, 08, 10, 11, 12 |
 | Reviews | F-REVIEW-01 through 13 (client surface) |
-| Media | F-MEDIA-01, 02, 05, 06 (metadata and album model) |
+| Media | F-MEDIA-01, 04, 05, 06 |
 | Social | F-SOCIAL-01 through 07 |
 | Booking | F-BOOK-01 through 04, 06, 09, 09a, 10, 11 |
 | Events | F-EVENT-01 through 06 |
@@ -111,6 +111,17 @@ collaborator list, not just a `shared`-by-link flag with no one behind it — th
 one collection with a contribution pre-attributed to a community member, since a fresh local-only
 collection could otherwise never show that the model supports it.
 
+**Photo upload** (`app/photo/new.tsx`, `src/lib/media.ts`, F-MEDIA-01). A real upload path, not a
+count-only stepper: pick from the camera or the library, and the image is re-encoded through
+`expo-image-manipulator` before it ever reaches the network — producing a new JPEG drops embedded
+EXIF (including GPS tags) as a side effect of how virtually every encoder works, which is the
+closest a client-only build gets to F-MEDIA-05's metadata-stripping requirement without a server
+in the loop to verify it. `by` (owner vs. community) is computed server-side from `business_roles`,
+the same conflict-of-interest pattern F-TRUST-06 uses for reviews — a client cannot claim to be the
+venue. A daily upload cap and the removal-*request* flow (F-MEDIA-04) are both real, database-backed
+records; there is no moderation queue behind them to act on the request, for the same reason F-BIZ
+and F-TRUST are out of scope for this client.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -128,9 +139,14 @@ collection could otherwise never show that the model supports it.
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery
   rule is stated; checkout is not built.
-- **Photography.** The app bundles no images. `PhotoTile` renders a deterministic gradient plus
-  the album icon. What the PRD actually asks for around media *is* implemented: album
-  classification, owner versus community segmentation, and alternative text on every image.
+- **Automated photo classification into albums** (F-MEDIA-02). Album is a real, stored field —
+  it's just chosen by the uploader from a chip list rather than by a vision model. Seed photos
+  still render as a deterministic gradient plus the album icon, since the app bundles no stock
+  photography; a real upload renders as the actual image (see *Photo upload* below).
+- **Automated content screening** (F-MEDIA-03). Screening only means something with a moderation
+  queue and reviewers to act on it, and F-TRUST/F-ADMIN are out of scope for the same reason F-BIZ
+  is — there is no internal tooling in this client. What's real instead: the removal-*request*
+  flow itself, and a database-enforced daily upload cap.
 - **Map tiles.** `MiniMap` is a schematic map with normalized coordinates, because the demo has no
   network dependency or API key. It implements the requirement that matters — pin interaction and
   map-bounded re-search. Swapping in `react-native-maps` later replaces that one component; the
@@ -193,6 +209,10 @@ presentation only. So:
 - A message thread's `sender` column is constrained to `'user'` at the schema level, and a rate
   limit (5 seconds per thread, 40 per account per hour) is enforced by trigger, not just by the
   composer disabling Send (F-MSG-04, NFR-11).
+- A photo's `by` (owner vs. community) is computed from `business_roles` by trigger, never trusted
+  from the client, and a daily upload cap (8 photos, 40 for Elite) is enforced the same way
+  (F-MEDIA-01). An upload's storage path is checked against real venue ids before it's accepted,
+  not just organized by convention.
 
 One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
 enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus

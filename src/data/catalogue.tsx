@@ -4,7 +4,7 @@ import { loadCatalogue, type Source } from '@/data/repository';
 import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
-import type { Review, Venue, VenueEvent } from '@/types';
+import type { Photo, Review, Venue, VenueEvent } from '@/types';
 
 /**
  * The catalogue: venues, events, and reviews, from whichever source is
@@ -33,6 +33,13 @@ type CatalogueCtx = {
   venueReviews: (venueId: string, includeFiltered?: boolean) => Review[];
   filteredCount: (venueId: string) => number;
   eventsForVenue: (venueId: string) => VenueEvent[];
+  /**
+   * F-MEDIA-01: append a just-uploaded photo to a venue's gallery in this
+   * session, without waiting on a full `reload()`. The upload already
+   * persisted server-side by the time this is called — this only updates
+   * what's on screen.
+   */
+  addLocalPhoto: (venueId: string, photo: Photo) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -67,6 +74,12 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
   }, [nonce]);
 
   const reload = useCallback(() => setNonce((v) => v + 1), []);
+
+  const addLocalPhoto = useCallback((venueId: string, photo: Photo) => {
+    setVenues((prev) =>
+      prev.map((v) => (v.id === venueId ? { ...v, photos: [...v.photos, photo] } : v)),
+    );
+  }, []);
 
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
@@ -104,8 +117,12 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       filteredCount: (venueId) =>
         (reviewsByVenue[venueId] ?? []).filter((r) => !r.recommended).length,
       eventsForVenue: (venueId) => eventsByVenue[venueId] ?? [],
+      addLocalPhoto,
     }),
-    [venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue, eventsByVenue],
+    [
+      venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
+      eventsByVenue, addLocalPhoto,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

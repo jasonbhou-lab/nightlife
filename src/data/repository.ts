@@ -3,9 +3,9 @@ import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
 import type {
-  EventRow, ReviewRow, TableTierRow, VenueRow,
+  EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
 } from '@/lib/database.types';
-import type { Review, Venue, VenueEvent } from '@/types';
+import type { Photo, Review, Venue, VenueEvent } from '@/types';
 
 /**
  * The single place the app gets venue data from.
@@ -161,6 +161,19 @@ function mapReview(row: ReviewRow): Review {
   };
 }
 
+/** A row from the real `photos` table, with its storage path resolved to a public URL. */
+function mapPhotoRow(row: PhotoRow, publicUrl: string): Photo {
+  return {
+    id: row.id,
+    album: row.album,
+    caption: row.caption ?? '',
+    by: row.by,
+    alt: row.alt ?? 'Community-uploaded photo',
+    uri: publicUrl,
+    removalRequested: row.removal_requested || undefined,
+  };
+}
+
 /* ------------------------------------------------------------ distance */
 
 /**
@@ -213,14 +226,15 @@ export async function loadCatalogue(
   if (!hasBackend || !supabase) return seedCatalogue;
 
   try {
-    const [venuesRes, tiersRes, eventsRes, reviewsRes] = await Promise.all([
+    const [venuesRes, tiersRes, eventsRes, reviewsRes, photosRes] = await Promise.all([
       supabase.from('venues').select('*'),
       supabase.from('table_tiers').select('*'),
       supabase.from('events').select('*'),
       supabase.from('reviews').select('*'),
+      supabase.from('photos').select('*'),
     ]);
 
-    const firstError = venuesRes.error ?? tiersRes.error ?? eventsRes.error ?? reviewsRes.error;
+    const firstError = venuesRes.error ?? tiersRes.error ?? eventsRes.error ?? reviewsRes.error ?? photosRes.error;
     if (firstError) throw new Error(firstError.message);
 
     const venueRows = venuesRes.data ?? [];
@@ -249,8 +263,23 @@ export async function loadCatalogue(
       v.distanceMi === 0 ? { ...v, distanceMi: seedDistances.get(v.id) ?? 0 } : v,
     );
 
+    // Real uploads (F-MEDIA-01) live in their own table, additive to the
+    // owner-provided photos already embedded in the venue's jsonb document —
+    // appended, not replacing them.
+    const photosByVenue = new Map<string, Photo[]>();
+    for (const row of photosRes.data ?? []) {
+      const { data: pub } = supabase.storage.from('venue-photos').getPublicUrl(row.storage_path);
+      const list = photosByVenue.get(row.venue_id) ?? [];
+      list.push(mapPhotoRow(row, pub.publicUrl));
+      photosByVenue.set(row.venue_id, list);
+    }
+    const withUploadedPhotos = withFallbackDistance.map((v) => {
+      const uploaded = photosByVenue.get(v.id);
+      return uploaded?.length ? { ...v, photos: [...v.photos, ...uploaded] } : v;
+    });
+
     return {
-      venues: withDistances(withFallbackDistance, origin, rowsById),
+      venues: withDistances(withUploadedPhotos, origin, rowsById),
       events: (eventsRes.data ?? []).map(mapEvent),
       reviews: (reviewsRes.data ?? []).map(mapReview),
       source: 'remote',
@@ -441,6 +470,80 @@ export async function sendMessage(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; kept on this device only.' };
   const { error } = await supabase.from('messages').insert({ thread_id: input.threadId, body: input.text });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Upload a photo (F-MEDIA-01). `localUri` should already be the prepared
+ * image from `src/lib/media.ts` — resized and re-encoded, not the raw pick.
+ *
+ * `by` and `alt` are never sent: the server computes ownership from
+ * `business_roles` and fills a fallback alt text if none is given, the same
+ * shape as `recommended` on a review — the client proposes, the database
+ * decides. The daily upload cap (F-MEDIA-01) and the storage path check that
+ * an upload actually lands under a real venue's folder are both enforced by
+ * the database, not by this function declining to try.
+ */
+export async function uploadPhoto(input: {
+  venueId: string;
+  album: Photo['album'];
+  caption?: string;
+  localUri: string;
+}): Promise<{ ok: true; photo: Photo } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) {
+    return { ok: false, error: 'No backend configured; the photo could not be uploaded.' };
+  }
+
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to add a photo.' };
+
+  const path = `${input.venueId}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`;
+
+  try {
+    const response = await fetch(input.localUri);
+    const blob = await response.blob();
+
+    const { error: uploadError } = await supabase.storage
+      .from('venue-photos')
+      .upload(path, blob, { contentType: 'image/jpeg' });
+    if (uploadError) return { ok: false, error: uploadError.message };
+
+    const { data: row, error: insertError } = await supabase
+      .from('photos')
+      .insert({
+        venue_id: input.venueId,
+        uploaded_by: user.id,
+        album: input.album as never,
+        caption: input.caption ?? null,
+        storage_path: path,
+      })
+      .select('*')
+      .single();
+    if (insertError) return { ok: false, error: insertError.message };
+
+    const { data: pub } = supabase.storage.from('venue-photos').getPublicUrl(path);
+    return { ok: true, photo: mapPhotoRow(row, pub.publicUrl) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Could not upload the photo.' };
+  }
+}
+
+/** F-MEDIA-04: file a removal request. There is no moderation queue in this
+ * build to act on it — see the migration header — but the record is real. */
+export async function requestPhotoRemoval(input: {
+  photoId: string;
+  reason: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the request was not sent.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to request removal.' };
+
+  const { error } = await supabase
+    .from('photo_removal_requests')
+    .insert({ photo_id: input.photoId, requested_by: user.id, reason: input.reason });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

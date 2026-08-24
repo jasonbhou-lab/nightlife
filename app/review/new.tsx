@@ -1,18 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { PhotoTile } from '@/components/PhotoTile';
 import { StarInput } from '@/components/Stars';
 import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { uploadPhoto } from '@/data/repository';
+import { pickPhoto } from '@/lib/media';
 import { subRatingDimensions, tagVocabulary } from '@/lib/ratings';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
-import type { Review, SubRatingKey } from '@/types';
+import type { Photo, Review, SubRatingKey, Vertical } from '@/types';
+
+/** F-MEDIA-01: a sensible default album per vertical; the venue's own Photos
+ * section lets anyone re-file a photo into a different album later. */
+const defaultAlbumFor: Record<Vertical, Photo['album']> = {
+  dining: 'food',
+  bar: 'drink',
+  lounge: 'drink',
+  cigar: 'humidor',
+  nightclub: 'crowd',
+};
 
 const MIN_CHARS = 60;
 
@@ -31,7 +44,7 @@ export default function NewReviewScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { drafts, saveDraft, clearDraft, now, session } = useApp();
-  const { getVenue } = useCatalogue();
+  const { getVenue, addLocalPhoto } = useCatalogue();
 
   const venue = getVenue(id);
   const existing = id ? drafts[id] : undefined;
@@ -40,12 +53,17 @@ export default function NewReviewScreen() {
   const [subs, setSubs] = useState<Partial<Record<SubRatingKey, number>>>(existing?.subRatings ?? {});
   const [text, setText] = useState(existing?.text ?? '');
   const [tags, setTags] = useState<Review['tags']>(existing?.tags ?? {});
-  const [photoCount, setPhotoCount] = useState(existing?.photoCount ?? 0);
+  // Resuming a draft cannot recover which actual photos were added in an
+  // earlier session — only the count was ever saved. It starts empty; the
+  // count itself still round-trips through the draft below.
+  const [attachedPhotos, setAttachedPhotos] = useState<Photo[]>([]);
+  const [addingPhoto, setAddingPhoto] = useState(false);
   const [comped, setComped] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(existing?.savedAt ?? null);
   const [submitted, setSubmitted] = useState(false);
 
   const dims = venue ? subRatingDimensions[venue.primary.vertical] : [];
+  const photoCount = attachedPhotos.length || existing?.photoCount || 0;
 
   // Autosave with a short debounce.
   useEffect(() => {
@@ -58,6 +76,30 @@ export default function NewReviewScreen() {
     }, 900);
     return () => clearTimeout(t);
   }, [rating, subs, text, tags, photoCount, venue, saveDraft, submitted]);
+
+  const addPhoto = async (source: 'library' | 'camera') => {
+    if (!venue) return;
+    setAddingPhoto(true);
+    try {
+      const picked = await pickPhoto(source);
+      if (!picked) return;
+      const result = await uploadPhoto({
+        venueId: venue.id,
+        album: defaultAlbumFor[venue.primary.vertical],
+        localUri: picked.uri,
+      });
+      if (!result.ok) {
+        Alert.alert('Could not upload', result.error);
+        return;
+      }
+      addLocalPhoto(venue.id, result.photo);
+      setAttachedPhotos((prev) => [...prev, result.photo]);
+    } catch {
+      Alert.alert('Could not open the picker', 'Check that camera or photo permissions are allowed for this app.');
+    } finally {
+      setAddingPhoto(false);
+    }
+  };
 
   const remaining = Math.max(0, MIN_CHARS - text.trim().length);
   const canSubmit = rating > 0 && remaining === 0;
@@ -274,43 +316,38 @@ export default function NewReviewScreen() {
         </Card>
       </View>
 
-      {/* Photos: count only, since the prototype has no camera pipeline. */}
+      {/* Real upload (F-MEDIA-01), not the old count-only stepper. Each photo
+          posts straight to the venue's public gallery as you add it — this
+          composer doesn't hold a draft of the images the way it does the
+          text, since there is nowhere unpublished to hold them. */}
       <View style={gutter()}>
-        <SectionHeader title="Photos" subtitle="Location and device data stripped on upload" />
+        <SectionHeader title="Photos" subtitle="Posted to the gallery as you add them" />
         <Card>
+          {attachedPhotos.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: space.md }}>
+              <View style={[ui.row, { gap: space.sm }]}>
+                {attachedPhotos.map((p) => (
+                  <PhotoTile key={p.id} photo={p} width={90} height={90} showMeta={false} />
+                ))}
+              </View>
+            </ScrollView>
+          ) : null}
           <View style={[ui.row, { gap: space.md }]}>
             <IconBadge icon="camera" size={44} />
             <View style={{ flex: 1 }}>
               <Text style={[font.bodyStrong, { color: theme.text }]}>
-                {photoCount ? `${photoCount} attached` : 'Add photos or a short video'}
+                {attachedPhotos.length ? `${attachedPhotos.length} added` : 'Add photos'}
               </Text>
               <Text style={[font.small, { color: theme.textDim }]}>
-                Up to 60 seconds of video. Screened for nudity, violence, and visible personal
-                information before it publishes.
+                Location and device metadata are stripped before upload. Remove one later from the
+                venue's Photos section if you change your mind.
               </Text>
             </View>
-            <Pressable
-              onPress={() => setPhotoCount((n) => n + 1)}
-              accessibilityRole="button"
-              accessibilityLabel="Add a photo"
-              style={{
-                width: 44, height: 44, borderRadius: 22, backgroundColor: theme.accentSoft,
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="add" size={22} color={theme.accent} />
-            </Pressable>
           </View>
-          {photoCount ? (
-            <Pressable
-              onPress={() => setPhotoCount(0)}
-              accessibilityRole="button"
-              accessibilityLabel="Remove attached photos"
-              style={{ marginTop: space.md, minHeight: 34, justifyContent: 'center' }}
-            >
-              <Text style={[font.small, { color: theme.closed }]}>Remove all</Text>
-            </Pressable>
-          ) : null}
+          <View style={[ui.row, { gap: space.sm, marginTop: space.md }]}>
+            <Button label="Camera" icon="camera" variant="secondary" loading={addingPhoto} onPress={() => addPhoto('camera')} />
+            <Button label="Library" icon="images" variant="secondary" loading={addingPhoto} onPress={() => addPhoto('library')} />
+          </View>
         </Card>
       </View>
 
