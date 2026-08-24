@@ -15,9 +15,10 @@ import { useCatalogue } from '@/data/catalogue';
 import { verticalMeta } from '@/data/taxonomy';
 import { formatAttribute } from '@/lib/format';
 import { activeFilterCount, parseNaturalQuery, searchVenues, suggest, type Suggestion } from '@/lib/search';
+import { detectVibe, rankByVibe, vibeDefs, type VibeDef } from '@/lib/vibes';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
-import type { SortKey, Venue, Vertical } from '@/types';
+import type { Review, SortKey, Venue, Vertical } from '@/types';
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'relevance', label: 'Relevance' },
@@ -32,7 +33,7 @@ export default function SearchScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { filters, setFilters, resetFilters, now, recentSearches, pushRecentSearch } = useApp();
-  const { venues, source, error: backendError } = useCatalogue();
+  const { venues, reviews, source, error: backendError } = useCatalogue();
 
   const [text, setText] = useState(filters.query);
   const [focused, setFocused] = useState(false);
@@ -40,6 +41,13 @@ export default function SearchScreen() {
   const [sheet, setSheet] = useState(false);
   const [areaLimited, setAreaLimited] = useState<Venue[] | null>(null);
   const [nlNote, setNlNote] = useState<string[] | null>(null);
+  const [activeVibe, setActiveVibe] = useState<VibeDef | null>(null);
+
+  const reviewsByVenue = useMemo(() => {
+    const map: Record<string, Review[]> = {};
+    for (const r of reviews) if (r.recommended) (map[r.venueId] ||= []).push(r);
+    return map;
+  }, [reviews]);
 
   const suggestions = useMemo(
     () => (focused ? suggest(text, venues) : []),
@@ -51,6 +59,18 @@ export default function SearchScreen() {
     [filters, now, areaLimited, venues],
   );
 
+  // F-SEARCH-12: reranks whatever the other active filters already turned up
+  // (promoted placements stay pinned per F-SEARCH-09) rather than replacing
+  // the search pool, so a vibe composes with the filter sheet instead of
+  // standing apart from it.
+  const vibeResults = useMemo(
+    () =>
+      activeVibe
+        ? rankByVibe(search.results.filter((v) => !v.promoted), reviewsByVenue, activeVibe)
+        : null,
+    [activeVibe, search.results, reviewsByVenue],
+  );
+
   const count = activeFilterCount(filters);
 
   const submit = () => {
@@ -59,13 +79,32 @@ export default function SearchScreen() {
     // F-SEARCH-11: compound intent goes through the natural-language parser,
     // which reports back what it understood so it can be corrected.
     const { filters: parsed, understood } = parseNaturalQuery(text);
+    const vibe = detectVibe(text);
     if (understood.length >= 2) {
       setFilters({ ...filters, ...parsed, query: '' });
       setNlNote(understood);
+      setActiveVibe(null);
+    } else if (vibe) {
+      // F-SEARCH-12: a named vibe reranks by evidence rather than filtering by
+      // literal text — venue copy rarely says "date night" about itself, but
+      // its reviews do.
+      setFilters({ ...filters, query: '' });
+      setNlNote(null);
+      setActiveVibe(vibe);
     } else {
       setFilters({ ...filters, query: text });
       setNlNote(null);
+      setActiveVibe(null);
     }
+  };
+
+  const applyVibe = (vibe: VibeDef) => {
+    setText(vibe.label);
+    setFocused(false);
+    pushRecentSearch(vibe.label);
+    setFilters({ ...filters, query: '' });
+    setNlNote(null);
+    setActiveVibe(vibe);
   };
 
   const applySuggestion = (s: Suggestion) => {
@@ -81,6 +120,7 @@ export default function SearchScreen() {
     setText(s.label);
     setFilters({ ...filters, query: s.label });
     pushRecentSearch(s.label);
+    setActiveVibe(null);
   };
 
   /** U-10: one-tap clearing of individual filters. */
@@ -89,6 +129,7 @@ export default function SearchScreen() {
       setText('');
       setFilters({ ...filters, query: '' });
       setNlNote(null);
+      setActiveVibe(null);
     } else if (key === 'verticals') setFilters({ ...filters, verticals: [] });
     else if (key === 'priceTiers') setFilters({ ...filters, priceTiers: [] });
     else if (key === 'minRating') setFilters({ ...filters, minRating: null });
@@ -158,7 +199,7 @@ export default function SearchScreen() {
             />
             {text ? (
               <Pressable
-                onPress={() => { setText(''); setFilters({ ...filters, query: '' }); setNlNote(null); }}
+                onPress={() => { setText(''); setFilters({ ...filters, query: '' }); setNlNote(null); setActiveVibe(null); }}
                 hitSlop={10}
                 accessibilityRole="button"
                 accessibilityLabel="Clear search text"
@@ -231,7 +272,30 @@ export default function SearchScreen() {
             <Label>Recent</Label>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm }}>
               {recentSearches.map((q) => (
-                <Chip key={q} label={q} onPress={() => { setText(q); setFilters({ ...filters, query: q }); setFocused(false); }} />
+                <Chip
+                  key={q}
+                  label={q}
+                  onPress={() => {
+                    setText(q);
+                    setFilters({ ...filters, query: q });
+                    setFocused(false);
+                    setNlNote(null);
+                    setActiveVibe(null);
+                  }}
+                />
+              ))}
+            </View>
+          </Card>
+        ) : null}
+
+        {/* F-SEARCH-12: named vibes are not discoverable by guessing, so they
+            get their own row rather than living only in the placeholder text. */}
+        {focused && !text ? (
+          <Card>
+            <Label>Try a vibe</Label>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm }}>
+              {vibeDefs.map((v) => (
+                <Chip key={v.key} label={v.label} icon="sparkles" onPress={() => applyVibe(v)} />
               ))}
             </View>
           </Card>
@@ -249,6 +313,34 @@ export default function SearchScreen() {
                 <Text style={[font.bodyStrong, { color: theme.text }]}>{nlNote.join(' · ')}</Text>
               </View>
               <Pressable onPress={() => setNlNote(null)} hitSlop={10} accessibilityLabel="Dismiss interpretation" accessibilityRole="button">
+                <Ionicons name="close" size={18} color={theme.textFaint} />
+              </Pressable>
+            </View>
+          </Card>
+        </View>
+      ) : null}
+
+      {/* Vibe readback: what evidence backs this ranking, not a rationale for
+          any one venue (same spirit as F-REVIEW-07 — the model, not the play
+          by play). */}
+      {activeVibe ? (
+        <View style={gutter()}>
+          <Card>
+            <View style={[ui.row, { gap: space.sm }]}>
+              <IconBadge icon="sparkles" size={34} />
+              <View style={{ flex: 1 }}>
+                <Text style={[font.small, { color: theme.textDim }]}>Matching the vibe</Text>
+                <Text style={[font.bodyStrong, { color: theme.text }]}>{activeVibe.label}</Text>
+                <Text style={[font.small, { color: theme.textFaint, marginTop: 2 }]}>
+                  Ranked by what reviews and photos actually show, not by name matching.
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => { setActiveVibe(null); setText(''); }}
+                hitSlop={10}
+                accessibilityLabel="Clear the vibe"
+                accessibilityRole="button"
+              >
                 <Ionicons name="close" size={18} color={theme.textFaint} />
               </Pressable>
             </View>
@@ -291,7 +383,7 @@ export default function SearchScreen() {
             {activeChips.map((c) => (
               <Chip key={c.key} label={c.label} tone="ground" onRemove={() => clearOne(c.key)} />
             ))}
-            <Chip label="Clear all" icon="close-circle" tone="ground" onPress={() => { resetFilters(); setText(''); setNlNote(null); }} />
+            <Chip label="Clear all" icon="close-circle" tone="ground" onPress={() => { resetFilters(); setText(''); setNlNote(null); setActiveVibe(null); }} />
           </View>
         ) : null}
 
@@ -317,24 +409,47 @@ export default function SearchScreen() {
       {/* Results. */}
       <View style={gutter()}>
         <Text style={[font.meta, { color: theme.onGroundDim, marginBottom: space.md }]}>
-          {search.results.length} {search.results.length === 1 ? 'result' : 'results'}
+          {activeVibe
+            ? `${search.promoted.length + (vibeResults?.length ?? 0)} results`
+            : `${search.results.length} ${search.results.length === 1 ? 'result' : 'results'}`}
           {search.promoted.length ? ` · ${search.promoted.length} paid placement` : ''}
         </Text>
 
         {mode === 'map' ? (
           <MiniMap
-            venues={search.results}
+            venues={activeVibe ? [...search.promoted, ...(vibeResults ?? []).map((r) => r.venue)] : search.results}
             onSearchArea={(inBounds) => {
               setAreaLimited(inBounds);
               setMode('list');
             }}
           />
+        ) : activeVibe ? (
+          <>
+            {search.promoted.map((v) => <VenueCard key={v.id} venue={v} />)}
+            {vibeResults && vibeResults.length ? (
+              vibeResults.map(({ venue, match }) => (
+                <View key={venue.id}>
+                  <VenueCard venue={venue} />
+                  <Text style={[font.small, { color: theme.onGroundFaint, marginTop: -space.sm, marginBottom: space.md, marginLeft: space.sm }]}>
+                    {match.evidence.join(' · ')}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Card>
+                <Body dim>
+                  No venues have enough evidence for “{activeVibe.label}” yet. Try a different vibe, or clear it
+                  to see everything the other filters allow.
+                </Body>
+              </Card>
+            )}
+          </>
         ) : search.results.length ? (
           search.results.map((v) => <VenueCard key={v.id} venue={v} />)
         ) : null}
 
         {/* F-SEARCH-10: name the specific filter to drop, do not just say "broaden". */}
-        {mode === 'list' && search.results.length < 3 ? (
+        {!activeVibe && mode === 'list' && search.results.length < 3 ? (
           <Card>
             <View style={[ui.row, { gap: space.sm, marginBottom: space.md }]}>
               <IconBadge icon={search.results.length === 0 ? 'search' : 'add-circle'} size={40} />

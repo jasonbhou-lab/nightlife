@@ -29,7 +29,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 
 | Area | Requirements covered |
 |---|---|
-| Search and discovery | F-SEARCH-01 through 07, 09, 10, 11 |
+| Search and discovery | F-SEARCH-01 through 07, 09 through 12 |
 | Venue profile | F-PROFILE-01 through 06, 07, 08, 10, 11, 12 |
 | Reviews | F-REVIEW-01 through 13 (client surface) |
 | Media | F-MEDIA-01, 04, 05, 06 |
@@ -82,6 +82,17 @@ Reserve button.
 the rating and the default view but remain reachable behind a disclosed link, with no per-review
 rationale exposed. Comped visits carry a disclosure badge. The aggregate rating weights recency,
 reviewer trust, and detail, and the plain-language explanation of that is published in the app.
+
+**Vibe search** (`src/lib/vibes.ts`, F-SEARCH-12). "Dressy," "date night," "low-key," and "bottle
+service crowd" are the PRD's own examples, and none of them are things a venue says about itself —
+they're what its reviews and photos show. Same honesty as F-SEARCH-11's natural-language parser:
+a modest keyword-and-signal scorer, not an embedding model. It's a ranking layer, not a filter — a
+named vibe reranks whatever the other active filters already turned up (paid placements still
+pinned per F-SEARCH-09) by real evidence pulled from three places at once: the venue's own typed
+attributes (a `dressCode` of `dressy` is the strongest single signal there is), its recommended
+reviews' free text and structured occasion tags, and how many of its photos landed in a
+correlated album. A venue with zero evidence does not appear, and every one that does shows
+exactly what convinced it — "Dress code: Dressy · 1 review mentions it," not an unexplained score.
 
 **Bar/Lounge tiebreak** (PRD Open Question 8). Dual-assigned venues filter on their primary
 category, and in Tonight they surface as a Bar before 11 PM and as a Lounge after, since dwell
