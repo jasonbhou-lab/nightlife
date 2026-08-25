@@ -26,7 +26,7 @@ export default function ClaimVenueScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
-  const { session, attemptContribution } = useApp();
+  const { session, attemptContribution, addManagedVenue } = useApp();
   const { getVenue, markVenueClaimed } = useCatalogue();
 
   const venue = getVenue(venueId);
@@ -111,6 +111,7 @@ export default function ClaimVenueScreen() {
       return;
     }
     markVenueClaimed(venue.id);
+    addManagedVenue(venue.id);
     setDone(true);
   };
 

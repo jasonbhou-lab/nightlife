@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01 (scoped to self-serve claim) |
+| Business portal | F-BIZ-01 (scoped to self-serve claim), F-BIZ-07 (scoped to a response composer) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
@@ -164,6 +164,18 @@ and message threads stay exactly as blocked as before, since their RLS policies 
 `private.is_verified()` and nothing here can make that true. With no backend configured, sign-in
 falls back to the original local-only mock unchanged, so the app keeps working offline.
 
+**Review response composer** (`app/reviews/[id].tsx`, F-BIZ-07, scoped). The full requirement also
+asks for a sentiment summary, keyword themes, and alerting on new reviews below a threshold — those
+need real analytics or ML this build does not have, the same reason F-MEDIA-02/03's automated
+classification and screening are out of scope. The composer itself needed no invention: the
+`owner_response`/`owner_response_at` columns have existed since the very first migration, and their
+own guard trigger already said "owner responses are written through the business portal" — there
+just wasn't a portal yet. A signed-in account only ever sees "Respond as owner" on a venue it
+actually holds a `business_roles` row for (`AppProvider.isManagingVenue`, populated from a real
+query, not a guess), and the database — not the client — rejects an update from that account that
+touches anything on the review besides the response, so this can never become a backdoor to edit
+someone else's review.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -190,12 +202,13 @@ falls back to the original local-only mock unchanged, so the app keeps working o
   (Section 9, Open Question 3) rather than a product team's default to set.
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
-  visible *outputs* are implemented: Consumer Alert banners, owner responses, owner-answer badges,
-  paid-placement labels, claimed/unclaimed states, closure and successor handling. The one
-  exception is F-BIZ-01's claim step itself (see *Venue claim* above) — real, but scoped down to
-  self-attestation rather than the PRD's actual verification paths. Everything past that first
-  claim (the listing editor, hours/menu/media management, review response, analytics, and the
-  rest of F-BIZ-02 through 15) has no dashboard here at all.
+  visible *outputs* are implemented: Consumer Alert banners, owner-answer badges, paid-placement
+  labels, claimed/unclaimed states, closure and successor handling. Two exceptions are real,
+  scoped-down business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim
+  step (self-attestation, not the PRD's actual verification paths) and F-BIZ-07's review response
+  composer (no sentiment summary, keyword themes, or alerting). Everything else — the listing
+  editor, hours/menu/media management, analytics, and the rest of F-BIZ-02 through 15 — has no
+  dashboard here at all.
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery

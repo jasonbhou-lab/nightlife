@@ -46,6 +46,11 @@ type CatalogueCtx = {
    * which self-attestation does not earn. See repository.claimVenue.
    */
   markVenueClaimed: (venueId: string) => void;
+  /**
+   * F-BIZ-07: reflect a just-posted owner response in this session without
+   * waiting on a full `reload()`. See repository.respondToReview.
+   */
+  setReviewOwnerResponse: (reviewId: string, response: { text: string; date: string }) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -91,6 +96,13 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, claimed: true } : v)));
   }, []);
 
+  const setReviewOwnerResponse = useCallback(
+    (reviewId: string, response: { text: string; date: string }) => {
+      setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, ownerResponse: response } : r)));
+    },
+    [],
+  );
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -129,10 +141,11 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       eventsForVenue: (venueId) => eventsByVenue[venueId] ?? [],
       addLocalPhoto,
       markVenueClaimed,
+      setReviewOwnerResponse,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
-      eventsByVenue, addLocalPhoto, markVenueClaimed,
+      eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse,
     ],
   );
 

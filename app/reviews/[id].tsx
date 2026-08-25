@@ -1,15 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 
 import { Meter, Stars } from '@/components/Stars';
 import {
-  Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Screen, ScreenHeader,
+  Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
+import { respondToReview } from '@/data/repository';
 import { relativeDate } from '@/lib/format';
 import {
   aggregateFor, FILTERED_EXPLANATION, RATING_EXPLANATION, subRatingDimensions,
@@ -31,8 +32,8 @@ export default function ReviewsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { now, session, attemptContribution } = useApp();
-  const { getVenue, venueReviews } = useCatalogue();
+  const { now, session, attemptContribution, isManagingVenue } = useApp();
+  const { getVenue, venueReviews, setReviewOwnerResponse } = useCatalogue();
   const [showFiltered, setShowFiltered] = useState(false);
   const [sort, setSort] = useState<'recent' | 'helpful' | 'high' | 'low'>('recent');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -51,6 +52,14 @@ export default function ReviewsScreen() {
   const recommended = all.filter((r) => r.recommended);
   const filtered = all.filter((r) => !r.recommended);
   const dims = subRatingDimensions[venue.primary.vertical];
+  const canRespond = isManagingVenue(venue.id);
+
+  const respond = async (reviewId: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const result = await respondToReview({ reviewId, text });
+    if (!result.ok) return result;
+    setReviewOwnerResponse(reviewId, result.response);
+    return { ok: true };
+  };
 
   const occasions = useMemo(
     () => Array.from(new Set(recommended.map((r) => r.tags.occasion).filter(Boolean))) as string[],
@@ -174,7 +183,7 @@ export default function ReviewsScreen() {
 
       <View style={gutter()}>
         {list.map((r) => (
-          <ReviewCard key={r.id} review={r} now={now} />
+          <ReviewCard key={r.id} review={r} now={now} canRespond={canRespond} onRespond={respond} />
         ))}
         {list.length === 0 ? (
           <Card>
@@ -203,7 +212,7 @@ export default function ReviewsScreen() {
           {showFiltered ? (
             <View style={{ marginTop: space.md }}>
               {filtered.map((r) => (
-                <ReviewCard key={r.id} review={r} now={now} notCounted />
+                <ReviewCard key={r.id} review={r} now={now} notCounted canRespond={canRespond} onRespond={respond} />
               ))}
             </View>
           ) : null}
@@ -247,11 +256,40 @@ export default function ReviewsScreen() {
   );
 }
 
-function ReviewCard({ review: r, now, notCounted }: { review: Review; now: Date; notCounted?: boolean }) {
+function ReviewCard({
+  review: r,
+  now,
+  notCounted,
+  canRespond,
+  onRespond,
+}: {
+  review: Review;
+  now: Date;
+  notCounted?: boolean;
+  canRespond?: boolean;
+  onRespond?: (reviewId: string, text: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+}) {
   const theme = useTheme();
   const router = useRouter();
   const [voted, setVoted] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
+  const [draft, setDraft] = useState(r.ownerResponse?.text ?? '');
+  const [posting, setPosting] = useState(false);
+  const [respondError, setRespondError] = useState<string | null>(null);
   const member = communityByName[r.author];
+
+  const postResponse = async () => {
+    if (!onRespond) return;
+    setPosting(true);
+    setRespondError(null);
+    const result = await onRespond(r.id, draft.trim());
+    setPosting(false);
+    if (!result.ok) {
+      setRespondError(result.error);
+      return;
+    }
+    setComposing(false);
+  };
 
   return (
     <Card style={{ marginBottom: space.md, opacity: notCounted ? 0.86 : 1 }}>
@@ -332,15 +370,69 @@ function ReviewCard({ review: r, now, notCounted }: { review: Review; now: Date;
         {r.photoCount ? <Chip label={`${r.photoCount} photos`} icon="image" /> : null}
       </View>
 
-      {r.ownerResponse ? (
+      {r.ownerResponse && !composing ? (
         <View style={{ marginTop: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: theme.cardMuted }}>
           <View style={[ui.row, { gap: 5, marginBottom: 4 }]}>
             <Ionicons name="checkmark-circle" size={13} color={theme.accent} />
-            <Text style={[font.small, { color: theme.accent }]}>
+            <Text style={[font.small, { color: theme.accent, flex: 1 }]}>
               Response from the owner · {relativeDate(r.ownerResponse.date, now)}
             </Text>
           </View>
           <Body dim>{r.ownerResponse.text}</Body>
+        </View>
+      ) : null}
+
+      {/* F-BIZ-07, scoped: a business account managing this venue can post or
+          edit the owner response here. Everyone else never sees this. */}
+      {canRespond && !composing ? (
+        <Button
+          label={r.ownerResponse ? 'Edit response' : 'Respond as owner'}
+          variant="ghost"
+          icon={r.ownerResponse ? 'create-outline' : 'chatbox-ellipses-outline'}
+          style={{ marginTop: space.md, alignSelf: 'flex-start' }}
+          onPress={() => {
+            setDraft(r.ownerResponse?.text ?? '');
+            setRespondError(null);
+            setComposing(true);
+          }}
+        />
+      ) : null}
+
+      {canRespond && composing ? (
+        <View style={{ marginTop: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: theme.cardMuted }}>
+          <Label>Response from the owner</Label>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder="Thanks for the visit — here's our side..."
+            placeholderTextColor={theme.textFaint}
+            accessibilityLabel="Owner response"
+            multiline
+            style={[
+              font.body,
+              {
+                color: theme.text,
+                backgroundColor: theme.card,
+                borderRadius: radius.md,
+                padding: space.md,
+                marginTop: space.sm,
+                minHeight: 80,
+                textAlignVertical: 'top',
+              },
+            ]}
+          />
+          {respondError ? (
+            <Text style={[font.small, { color: theme.closed, marginTop: space.sm }]}>{respondError}</Text>
+          ) : null}
+          <View style={[ui.row, { gap: space.sm, marginTop: space.md }]}>
+            <Button
+              label={r.ownerResponse ? 'Save' : 'Post response'}
+              loading={posting}
+              disabled={!draft.trim()}
+              onPress={postResponse}
+            />
+            <Button label="Cancel" variant="ghost" onPress={() => setComposing(false)} />
+          </View>
         </View>
       ) : null}
 

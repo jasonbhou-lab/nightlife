@@ -574,6 +574,37 @@ export async function claimVenue(input: {
   return { ok: true };
 }
 
+/** Venue ids the signed-in account holds a business role at (RLS restricts this to your own rows). */
+export async function getManagedVenueIds(): Promise<string[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase.from('business_roles').select('venue_id');
+  return (data ?? []).map((row) => row.venue_id);
+}
+
+/**
+ * F-BIZ-07 (scoped): post or edit the owner response on a review at a venue
+ * this account manages. The database is what actually enforces "only these
+ * two columns, only for your own venue" (see 20260825150000_add_review_response.sql)
+ * — this just sends the one field, the same shape as every other write here.
+ */
+export async function respondToReview(input: {
+  reviewId: string;
+  text: string;
+}): Promise<{ ok: true; response: { text: string; date: string } } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the response could not be posted.' };
+  const { data, error } = await supabase
+    .from('reviews')
+    .update({ owner_response: input.text })
+    .eq('id', input.reviewId)
+    .select('owner_response, owner_response_at')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    response: { text: data.owner_response ?? input.text, date: (data.owner_response_at ?? new Date().toISOString()).slice(0, 10) },
+  };
+}
+
 /* ------------------------------------------------------------------- auth */
 
 /**

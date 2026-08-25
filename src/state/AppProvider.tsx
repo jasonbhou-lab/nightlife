@@ -5,9 +5,9 @@ import React, {
 import { useColorScheme } from 'react-native';
 
 import {
-  createMessageThread, getAuthSnapshot, onAuthSignedOut, sendMessage as sendMessageRemote,
-  sendSignInCode as sendSignInCodeRemote, signOutRemote, verifySignInCode as verifySignInCodeRemote,
-  type AuthProfile,
+  createMessageThread, getAuthSnapshot, getManagedVenueIds, onAuthSignedOut,
+  sendMessage as sendMessageRemote, sendSignInCode as sendSignInCodeRemote, signOutRemote,
+  verifySignInCode as verifySignInCodeRemote, type AuthProfile,
 } from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
 import { hasBackend } from '@/lib/supabase';
@@ -99,6 +99,12 @@ type Ctx = {
   /** Returns 'ok' | 'soft_wall' | 'hard_wall'. */
   attemptContribution: () => 'ok' | 'soft_wall';
   canBook: boolean;
+
+  /** F-BIZ-01/07: venues this account holds a business role at. */
+  managedVenueIds: string[];
+  isManagingVenue: (venueId: string) => boolean;
+  /** Optimistic: reflects a just-succeeded claim before the next refetch. */
+  addManagedVenue: (venueId: string) => void;
 
   filters: FilterState;
   setFilters: (f: FilterState) => void;
@@ -214,6 +220,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
   const [prefs, setPrefsState] = useState<Preferences>(defaultPrefs);
   const [clockOverride, setClockOverrideState] = useState<number | null>(null);
+  const [managedVenueIds, setManagedVenueIds] = useState<string[]>([]);
 
   const persist = useCallback((key: string, value: unknown) => {
     AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {
@@ -303,6 +310,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const snapshot = await getAuthSnapshot();
           if (snapshot) {
             applyAuthProfile(snapshot);
+            setManagedVenueIds(await getManagedVenueIds());
           } else {
             setSession(defaultSession);
             persist(KEYS.session, defaultSession);
@@ -320,6 +328,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return onAuthSignedOut(() => {
       setSession(defaultSession);
       persist(KEYS.session, defaultSession);
+      setManagedVenueIds([]);
     });
   }, [persist]);
 
@@ -367,6 +376,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const result = await verifySignInCodeRemote({ email, code });
       if (!result.ok) return result;
       applyAuthProfile(result.profile);
+      getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
       return { ok: true };
     },
     [applyAuthProfile],
@@ -375,8 +385,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(() => {
     setSession(defaultSession);
     persist(KEYS.session, defaultSession);
+    setManagedVenueIds([]);
     if (hasBackend) signOutRemote().catch(() => {});
   }, [persist]);
+
+  const isManagingVenue = useCallback(
+    (venueId: string) => managedVenueIds.includes(venueId),
+    [managedVenueIds],
+  );
+
+  const addManagedVenue = useCallback(
+    (venueId: string) => setManagedVenueIds((prev) => (prev.includes(venueId) ? prev : [...prev, venueId])),
+    [],
+  );
 
   const verifyAge = useCallback(
     () => updateSession({ ageVerified: true, phoneVerified: true, role: 'verified' }),
@@ -705,6 +726,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       verifyAge,
       attemptContribution,
       canBook: session.role === 'verified' || session.role === 'elite',
+      managedVenueIds,
+      isManagingVenue,
+      addManagedVenue,
       filters,
       setFilters,
       resetFilters,
@@ -744,7 +768,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
-      verifySignInCode, verifyAge, attemptContribution, filters, setFilters, resetFilters, recentSearches,
+      verifySignInCode, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
+      addManagedVenue, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
       follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,
