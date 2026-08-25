@@ -761,7 +761,11 @@ export default function VenueProfile() {
 
       {/* About, address, contact. */}
       <View style={gutter()}>
-        <SectionHeader title="About" />
+        <SectionHeader
+          title="About"
+          actionLabel={isManagingVenue(venue.id) ? 'Edit' : undefined}
+          onAction={isManagingVenue(venue.id) ? () => router.push(`/venue/edit?venueId=${venue.id}`) : undefined}
+        />
         <Card>
           <Body dim>{venue.about}</Body>
           <Divider style={{ marginVertical: space.md }} />

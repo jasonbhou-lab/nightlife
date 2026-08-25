@@ -61,6 +61,11 @@ type CatalogueCtx = {
    * waiting on a full `reload()`. See repository.updateVenueMenus.
    */
   setVenueMenus: (venueId: string, menus: MenuSection[]) => void;
+  /**
+   * F-BIZ-03: reflect a just-saved tagline/about edit in this session
+   * without waiting on a full `reload()`. See repository.updateVenueListing.
+   */
+  setVenueListing: (venueId: string, tagline: string, about: string) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -126,6 +131,10 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, menus } : v)));
   }, []);
 
+  const setVenueListing = useCallback((venueId: string, tagline: string, about: string) => {
+    setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, tagline, about } : v)));
+  }, []);
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -167,11 +176,12 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setReviewOwnerResponse,
       setVenueHours,
       setVenueMenus,
+      setVenueListing,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
-      setVenueMenus,
+      setVenueMenus, setVenueListing,
     ],
   );
 

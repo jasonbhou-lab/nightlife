@@ -731,6 +731,25 @@ export async function updateVenueMenus(input: {
   return { ok: true };
 }
 
+/**
+ * F-BIZ-03 (scoped way down): tagline and about only, not the full typed
+ * attribute registry with change history — see the migration header on
+ * 20260825190000_add_venue_listing_edit.sql.
+ */
+export async function updateVenueListing(input: {
+  venueId: string;
+  tagline: string;
+  about: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the listing could not be updated.' };
+  const { error } = await supabase
+    .from('venues')
+    .update({ tagline: input.tagline, about: input.about })
+    .eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /* ------------------------------------------------------------------- auth */
 
 /**

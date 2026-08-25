@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 04, 05, 07, 13 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 03, 04, 05, 07, 13 (each scoped down — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
@@ -222,6 +222,18 @@ knew about `claimed` — so `business_roles_mark_venue_claimed()`'s own `UPDATE 
 true` had been failing since the moment that guard shipped, meaning **every claim, self-serve or
 invited, against a real backend was silently broken**. Fixed by adding `claimed` to the allowlist.
 
+**Listing tagline and about editor** (`app/venue/edit.tsx`, F-BIZ-03, scoped way down). The full
+requirement is a listing editor covering every Section 3 typed attribute — dress code, cover
+charge, noise level, and dozens more, each per category — with change history and rollback. That
+is a real, separate feature, not something to rush alongside two free-text fields, so this is just
+`tagline` and `about`. Extends the same jsonb-diff venue guard every prior F-BIZ venue-write
+feature has used. Caught before it shipped, by exercising the same direct-RLS-simulation technique
+the invite feature needed: `tagline` feeds `search_text` (recomputed by the original schema's own
+`venues_before_write_trg`, which — alphabetically before this guard — runs first), so the first
+version of this migration rejected every tagline edit outright for changing a column it didn't
+know was a legitimate side effect. Fixed by adding `search_text` to the allowlist alongside
+`tagline` itself.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -249,14 +261,15 @@ invited, against a real backend was silently broken**. Fixed by adding `claimed`
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner-answer badges, paid-placement
-  labels, claimed/unclaimed states, closure and successor handling. Five exceptions are real,
+  labels, claimed/unclaimed states, closure and successor handling. Six exceptions are real,
   scoped-down business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim
-  step (self-attestation, not the PRD's actual verification paths), F-BIZ-04's hours/happy-hour
-  editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list editor (no
-  CSV/PDF/photo import), F-BIZ-07's review response composer (no sentiment summary, keyword themes,
-  or alerting), and F-BIZ-13's invite-a-manager flow (manager/staff only, no access audit log).
-  Everything else — the rest of the listing editor, media management, analytics, and the rest of
-  F-BIZ-02 through 15 — has no dashboard here at all.
+  step (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about
+  editor (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
+  hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
+  editor (no CSV/PDF/photo import), F-BIZ-07's review response composer (no sentiment summary,
+  keyword themes, or alerting), and F-BIZ-13's invite-a-manager flow (manager/staff only, no
+  access audit log). Everything else — the typed attributes themselves, media management,
+  analytics, and the rest of F-BIZ-02 through 15 — has no dashboard here at all.
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery
