@@ -6,7 +6,7 @@ import type {
   EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  ClaimableBusinessRole, HappyHourWindow, Photo, Review, Schedule, Venue, VenueEvent,
+  ClaimableBusinessRole, HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent,
 } from '@/types';
 
 /**
@@ -623,6 +623,25 @@ export async function updateVenueHours(input: {
   const { error } = await supabase
     .from('venues')
     .update({ schedules: input.schedules as never, happy_hours: input.happyHours as never })
+    .eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-BIZ-05 (scoped): overwrite a managed venue's menus. No import from CSV,
+ * PDF, or photo — see the migration header on
+ * 20260825170000_add_venue_menu_edit.sql for why. The database enforces
+ * "only for a venue you manage," the same shape as updateVenueHours above.
+ */
+export async function updateVenueMenus(input: {
+  venueId: string;
+  menus: MenuSection[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the menu could not be updated.' };
+  const { error } = await supabase
+    .from('venues')
+    .update({ menus: input.menus as never })
     .eq('id', input.venueId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };

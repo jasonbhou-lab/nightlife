@@ -51,6 +51,15 @@ export function titleize(s: string): string {
     .join(' ');
 }
 
+export const DIET_LABELS: Record<string, string> = {
+  vegetarian: 'Vegetarian',
+  vegan: 'Vegan',
+  gluten_free: 'Gluten-free',
+  halal: 'Halal',
+  kosher: 'Kosher',
+  nut_free_kitchen: 'Nut-free kitchen',
+};
+
 /* ------------------------------------------------------------ provenance */
 
 export const provenanceLabel: Record<Provenance, string> = {

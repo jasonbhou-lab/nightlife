@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 04, 07 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 04, 05, 07 (each scoped down — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
@@ -195,6 +195,15 @@ re-renders the component, which called it again — an infinite loop (React's "M
 exceeded") that this browser hit live. Fixed in all three by moving the call into a one-time
 `useEffect`, not just the new screen.
 
+**Menu and tap-list editor** (`app/menu/edit.tsx`, F-BIZ-05, scoped). Manual editing only — import
+from CSV, PDF, or photo needs real OCR/parsing this build doesn't have, the same reason F-MEDIA-02's
+automated photo classification is out of scope. A business account can add, edit, and remove
+sections and items, and flip `soldOut` the moment a rotating tap kicks. Extends the same jsonb-diff
+venue guard trigger `updateVenueHours` uses — one growing allowlist (`schedules`, `happy_hours`,
+`menus`, `updated_at`) rather than a second competing trigger. Dietary tags reuse the exact label
+set (`DIET_LABELS`, now shared from `src/lib/format.ts`) the read-only menu screen already renders,
+so an owner can't type a tag value the display side doesn't recognize.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -222,13 +231,13 @@ exceeded") that this browser hit live. Fixed in all three by moving the call int
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner-answer badges, paid-placement
-  labels, claimed/unclaimed states, closure and successor handling. Three exceptions are real,
+  labels, claimed/unclaimed states, closure and successor handling. Four exceptions are real,
   scoped-down business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim
   step (self-attestation, not the PRD's actual verification paths), F-BIZ-04's hours/happy-hour
-  editor (no bulk/multi-location, no closure scheduling), and F-BIZ-07's review response composer
-  (no sentiment summary, keyword themes, or alerting). Everything else — the rest of the listing
-  editor, menu/media management, analytics, and the rest of F-BIZ-02 through 15 — has no dashboard
-  here at all.
+  editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list editor (no
+  CSV/PDF/photo import), and F-BIZ-07's review response composer (no sentiment summary, keyword
+  themes, or alerting). Everything else — the rest of the listing editor, media management,
+  analytics, and the rest of F-BIZ-02 through 15 — has no dashboard here at all.
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery

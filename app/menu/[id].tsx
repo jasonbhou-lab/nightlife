@@ -4,22 +4,13 @@ import React from 'react';
 import { Text, View } from 'react-native';
 
 import {
-  Body, Callout, Card, Chip, Divider, gutter, Label, Screen, ScreenHeader, SectionHeader,
+  Body, Button, Callout, Card, Chip, Divider, gutter, Label, Screen, ScreenHeader, SectionHeader,
   styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
-import { formatAttribute, relativeDate } from '@/lib/format';
+import { DIET_LABELS, formatAttribute, relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
-
-const DIET_LABELS: Record<string, string> = {
-  vegetarian: 'Vegetarian',
-  vegan: 'Vegan',
-  gluten_free: 'Gluten-free',
-  halal: 'Halal',
-  kosher: 'Kosher',
-  nut_free_kitchen: 'Nut-free kitchen',
-};
 
 /**
  * Menus (F-PROFILE-05): item-level menus for restaurants, tap lists for bars,
@@ -35,7 +26,7 @@ export default function MenuScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { now } = useApp();
+  const { now, isManagingVenue } = useApp();
   const { getVenue } = useCatalogue();
   const venue = getVenue(id);
 
@@ -53,6 +44,17 @@ export default function MenuScreen() {
   return (
     <Screen contentStyle={{ gap: space.xl }}>
       <ScreenHeader title="Menu" subtitle={venue.name} onBack={() => router.back()} />
+
+      {isManagingVenue(venue.id) ? (
+        <View style={gutter()}>
+          <Button
+            label="Edit menu"
+            icon="create-outline"
+            variant="secondary"
+            onPress={() => router.push(`/menu/edit?venueId=${venue.id}`)}
+          />
+        </View>
+      ) : null}
 
       {venue.menus.some((m) => m.volatile) ? (
         <View style={gutter()}>
@@ -95,8 +97,11 @@ export default function MenuScreen() {
         <View style={gutter()}>
           <Card>
             <Body dim>
-              No menu on file. This listing is unclaimed, so nobody has uploaded one. Menus can be
-              added by photo and extracted, but a person confirms the result before it publishes.
+              {isManagingVenue(venue.id)
+                ? 'No menu on file yet. Add one above.'
+                : venue.claimed
+                  ? "No menu on file. The owner hasn't added one yet."
+                  : 'No menu on file. This listing is unclaimed, so nobody has added one.'}
             </Body>
           </Card>
         </View>
