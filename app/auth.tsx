@@ -5,6 +5,7 @@ import { Text, TextInput, View } from 'react-native';
 import {
   Body, Button, Callout, Card, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
 } from '@/components/ui';
+import { hasBackend } from '@/lib/supabase';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
 
@@ -15,23 +16,83 @@ import { font, radius, space } from '@/theme';
  * genuinely requires it, so this screen is only ever reached from such an
  * attempt, never from a splash screen.
  *
- * There is no real authentication here and deliberately no password field. A
- * prototype that collects credentials teaches people to hand them over.
+ * With a backend configured, this is real Supabase Auth — a one-time code
+ * emailed to you, no password field, ever. Without one, there is nowhere to
+ * send a code, so sign-in falls back to a local, unpersisted-past-this-
+ * device identity, exactly as this screen always worked before real auth
+ * existed. Either way, phone and age verification (the second step) stays
+ * self-attested — there is no real SMS provider wired up here.
  */
 export default function AuthScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { signIn, verifyAge, session } = useApp();
+  const {
+    signIn, sendSignInCode, verifySignInCode, verifyAge, session,
+  } = useApp();
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
-  const [step, setStep] = useState<'identify' | 'verify'>('identify');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'identify' | 'code' | 'verify'>('identify');
+
+  const submitIdentify = async () => {
+    if (!hasBackend) {
+      signIn(name.trim());
+      setStep('verify');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const result = await sendSignInCode(email.trim(), name.trim());
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setStep('code');
+  };
+
+  const resendCode = async () => {
+    setBusy(true);
+    setError(null);
+    const result = await sendSignInCode(email.trim(), name.trim());
+    setBusy(false);
+    if (!result.ok) setError(result.error);
+  };
+
+  const submitCode = async () => {
+    setBusy(true);
+    setError(null);
+    const result = await verifySignInCode(email.trim(), code.trim());
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setStep('verify');
+  };
+
+  const title = step === 'identify' ? 'Sign in' : step === 'code' ? 'Enter the code' : 'Verify';
+  const subtitle =
+    step === 'identify' ? 'Only needed to contribute or book'
+    : step === 'code' ? `Sent to ${email}`
+    : 'Phone and age';
 
   return (
     <Screen contentStyle={{ gap: space.lg }}>
       <ScreenHeader
-        title={step === 'identify' ? 'Sign in' : 'Verify'}
-        subtitle={step === 'identify' ? 'Only needed to contribute or book' : 'Phone and age'}
-        onBack={() => router.back()}
+        title={title}
+        subtitle={subtitle}
+        onBack={() => {
+          if (step === 'code') {
+            setStep('identify');
+            setError(null);
+          } else {
+            router.back();
+          }
+        }}
       />
 
       {step === 'identify' ? (
@@ -69,15 +130,49 @@ export default function AuthScreen() {
               ]}
             />
 
+            {hasBackend ? (
+              <>
+                <Label style={{ marginTop: space.md }}>Email</Label>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor={theme.textFaint}
+                  accessibilityLabel="Email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  style={[
+                    font.body,
+                    {
+                      color: theme.text,
+                      backgroundColor: theme.cardMuted,
+                      borderRadius: radius.md,
+                      paddingHorizontal: space.md,
+                      minHeight: 48,
+                      marginTop: space.sm,
+                    },
+                  ]}
+                />
+                <Text style={[font.small, { color: theme.textFaint, marginTop: space.sm }]}>
+                  We'll email a one-time code — no password to set or remember.
+                </Text>
+              </>
+            ) : null}
+
+            {error ? (
+              <Callout tone="danger" icon="alert-circle" title="Could not send a code">
+                <Body dim>{error}</Body>
+              </Callout>
+            ) : null}
+
             <Button
               label="Continue"
               full
+              loading={busy}
               style={{ marginTop: space.lg }}
-              disabled={!name.trim()}
-              onPress={() => {
-                signIn(name.trim());
-                setStep('verify');
-              }}
+              disabled={!name.trim() || (hasBackend && !email.trim())}
+              onPress={submitIdentify}
             />
           </Card>
 
@@ -112,10 +207,68 @@ export default function AuthScreen() {
           </Card>
 
           <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', lineHeight: 17 }]}>
-            Prototype: no password is collected, no account is created, and nothing leaves this
-            device. Multi-factor authentication would be available to consumers and mandatory for
-            business and internal roles.
+            {hasBackend
+              ? 'Prototype: a one-time emailed code is the entire account — no password is ever ' +
+                'collected. Phone and age verification below remain self-attested; there is no real ' +
+                'SMS provider wired up. Multi-factor authentication would be mandatory for business ' +
+                'and internal roles.'
+              : 'Prototype: no backend is configured, so this identity is local to this device only ' +
+                'and nothing is created anywhere else. Phone and age verification below remain ' +
+                'self-attested either way.'}
           </Text>
+        </View>
+      ) : step === 'code' ? (
+        <View style={[gutter(), { gap: space.lg }]}>
+          <Card>
+            <View style={{ alignItems: 'center', gap: space.sm, marginBottom: space.lg }}>
+              <IconBadge icon="mail" size={52} />
+              <Text style={[font.title, { color: theme.text, textAlign: 'center' }]}>
+                Check your email
+              </Text>
+              <Body dim style={{ textAlign: 'center' }}>
+                Enter the 6-digit code sent to {email}.
+              </Body>
+            </View>
+
+            <Label>Code</Label>
+            <TextInput
+              value={code}
+              onChangeText={setCode}
+              placeholder="123456"
+              placeholderTextColor={theme.textFaint}
+              accessibilityLabel="One-time code"
+              keyboardType="number-pad"
+              maxLength={6}
+              style={[
+                font.body,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.cardMuted,
+                  borderRadius: radius.md,
+                  paddingHorizontal: space.md,
+                  minHeight: 48,
+                  marginTop: space.sm,
+                  letterSpacing: 4,
+                },
+              ]}
+            />
+
+            {error ? (
+              <Callout tone="danger" icon="alert-circle" title="Could not verify that code">
+                <Body dim>{error}</Body>
+              </Callout>
+            ) : null}
+
+            <Button
+              label="Verify and continue"
+              full
+              loading={busy}
+              style={{ marginTop: space.lg }}
+              disabled={code.trim().length < 6}
+              onPress={submitCode}
+            />
+            <Button label="Resend code" variant="ghost" full style={{ marginTop: space.sm }} onPress={resendCode} />
+          </Card>
         </View>
       ) : (
         <View style={[gutter(), { gap: space.lg }]}>

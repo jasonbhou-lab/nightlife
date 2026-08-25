@@ -431,6 +431,13 @@ export default function VenueProfile() {
                   No owner has verified this listing, so the details below are community-reported and
                   the venue has not confirmed them.
                 </Body>
+                <Button
+                  label="Claim this listing"
+                  variant="secondary"
+                  icon="shield-checkmark"
+                  style={{ marginTop: space.md }}
+                  onPress={() => requireAccount(() => router.push(`/claim/new?venueId=${venue.id}`))}
+                />
               </Callout>
             </View>
           ) : null}

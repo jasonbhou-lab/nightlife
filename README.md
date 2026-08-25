@@ -38,6 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
+| Business portal | F-BIZ-01 (scoped to self-serve claim) |
 | Usability | U-01 through U-12 |
 
 ### The parts that carry the most weight
@@ -133,19 +134,57 @@ venue. A daily upload cap and the removal-*request* flow (F-MEDIA-04) are both r
 records; there is no moderation queue behind them to act on the request, for the same reason F-BIZ
 and F-TRUST are out of scope for this client.
 
+**Venue claim** (`app/claim/new.tsx`, F-BIZ-01, scoped). The PRD's actual requirement is
+multi-path verification: an automated phone call, a postcard to the listed address, an email at
+a matching domain, or manual document review. None of those exist here. This was originally built
+before real Supabase Auth existed in this client at all, back when nothing could check a domain
+against a confirmed email even in principle — that gap is closed now (see *Real Supabase Auth*
+below), but this feature's scope did not change with it: signing in and asserting a role (`owner`
+or `manager`) creates a genuine `business_roles` row and flips `venues.claimed`, exactly the way
+filing a photo removal request creates a real record with no queue behind it (see *Photo upload*
+below). `venues.verified` is deliberately never touched by this path — it stays false, which the
+venue profile already rendered as "Claimed and unverified owner" before this feature existed, so
+the self-attested state is not a broken one. First claim wins; a venue with an existing
+`business_roles` row rejects further self-serve claims, and ownership transfer and disputes
+(F-BIZ-02) are out of scope.
+
+**Real Supabase Auth** (`app/auth.tsx`, `src/data/repository.ts`). Every backend-write function in
+this app — `publishReview`, `saveBooking`, `createMessageThread`, `uploadPhoto`, `claimVenue` —
+calls `supabase.auth.getUser()`, but nothing ever actually signed anyone in for real: `AppProvider`
+only ever set local, unpersisted-past-this-device mock state. That is fixed for every user now,
+not just for the claim flow: sign-in is a real one-time code emailed via Supabase Auth, no
+password field, ever, matching the reasoning this screen already stated for why one never existed.
+`handle_new_user()` (already in the schema since the first migration) seeds a real `profiles` row
+from the display name on first sign-in. What this does *not* fix, on purpose: `phone_verified` and
+`age_verified` remain self-attested, exactly as before — `profiles_guard_privileged_columns()`
+rejects a client write to either column outright, and nothing server-side sets them, since there is
+no real SMS provider wired up. That means real sign-in genuinely unblocks the writes that never
+required verification — photo uploads, removal requests, and venue claims — but reviews, bookings,
+and message threads stay exactly as blocked as before, since their RLS policies require
+`private.is_verified()` and nothing here can make that true. With no backend configured, sign-in
+falls back to the original local-only mock unchanged, so the app keeps working offline.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
   No card fields exist anywhere in the app.
-- **No real authentication.** Sign-in collects a display name and a phone number and creates
-  nothing. There is no password field, on purpose — a prototype that collects credentials teaches
-  people to hand them over.
-- **No age verification.** The age gate is self-attestation only. What standard is actually
-  required, and whether it differs for browsing versus transacting, is PRD Open Question 3.
+- **No password, anywhere, ever.** Sign-in is a real Supabase Auth account when a backend is
+  configured (see *Real Supabase Auth* above) — a one-time emailed code, not a mock. Without a
+  backend, it falls back to a local, unpersisted-past-this-device identity. Neither path has, or
+  will ever have, a password field: a prototype that collects credentials teaches people to hand
+  them over.
+- **No real phone or age verification.** The second sign-in step is self-attestation only, and
+  cannot become anything else without a real SMS provider — the database actively rejects a client
+  attempt to set `phone_verified`/`age_verified` itself. What standard is actually required, and
+  whether it differs for browsing versus transacting, is PRD Open Question 3.
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner responses, owner-answer badges,
-  paid-placement labels, claimed/unclaimed states, closure and successor handling.
+  paid-placement labels, claimed/unclaimed states, closure and successor handling. The one
+  exception is F-BIZ-01's claim step itself (see *Venue claim* above) — real, but scoped down to
+  self-attestation rather than the PRD's actual verification paths. Everything past that first
+  claim (the listing editor, hours/menu/media management, review response, analytics, and the
+  rest of F-BIZ-02 through 15) has no dashboard here at all.
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery

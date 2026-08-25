@@ -31,6 +31,7 @@ export type MessageThreadKindEnum = 'general' | 'quote_request';
 export type PhotoAlbumEnum =
   | 'food' | 'drink' | 'interior' | 'exterior' | 'menu' | 'crowd' | 'humidor' | 'stage' | 'table';
 export type PhotoCreditEnum = 'owner' | 'community';
+export type BusinessRoleEnum = 'owner' | 'manager' | 'staff' | 'group_admin';
 
 export type VenueRow = {
   id: string;
@@ -310,9 +311,9 @@ export type Database = {
         Relationships: [];
       };
       business_roles: {
-        Row: { user_id: string; venue_id: string; role: string; created_at: string };
-        Insert: { user_id: string; venue_id: string; role: string; created_at?: string };
-        Update: Partial<{ user_id: string; venue_id: string; role: string }>;
+        Row: { user_id: string; venue_id: string; role: BusinessRoleEnum; created_at: string };
+        Insert: { user_id: string; venue_id: string; role: BusinessRoleEnum; created_at?: string };
+        Update: Partial<{ user_id: string; venue_id: string; role: BusinessRoleEnum }>;
         Relationships: [];
       };
       message_threads: {

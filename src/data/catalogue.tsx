@@ -40,6 +40,12 @@ type CatalogueCtx = {
    * what's on screen.
    */
   addLocalPhoto: (venueId: string, photo: Photo) => void;
+  /**
+   * F-BIZ-01: reflect a just-succeeded claim in this session without waiting
+   * on a full `reload()`. Only ever flips `claimed` — never `verified`,
+   * which self-attestation does not earn. See repository.claimVenue.
+   */
+  markVenueClaimed: (venueId: string) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -81,6 +87,10 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const markVenueClaimed = useCallback((venueId: string) => {
+    setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, claimed: true } : v)));
+  }, []);
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -118,10 +128,11 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
         (reviewsByVenue[venueId] ?? []).filter((r) => !r.recommended).length,
       eventsForVenue: (venueId) => eventsByVenue[venueId] ?? [],
       addLocalPhoto,
+      markVenueClaimed,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
-      eventsByVenue, addLocalPhoto,
+      eventsByVenue, addLocalPhoto, markVenueClaimed,
     ],
   );
 

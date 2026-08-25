@@ -133,6 +133,13 @@ export type TableTier = {
   available: boolean;
 };
 
+/**
+ * F-BIZ-01. Only 'owner' and 'manager' are self-claimable — 'staff' and
+ * 'group_admin' presuppose an invite from someone who already holds a role
+ * (F-BIZ-13), which this build does not implement.
+ */
+export type ClaimableBusinessRole = 'owner' | 'manager';
+
 export type BookingMode =
   /** Restaurant-style reservations with a time grid. */
   | 'reservation'

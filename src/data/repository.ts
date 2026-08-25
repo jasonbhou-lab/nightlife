@@ -5,7 +5,7 @@ import { hasBackend, supabase } from '@/lib/supabase';
 import type {
   EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
 } from '@/lib/database.types';
-import type { Photo, Review, Venue, VenueEvent } from '@/types';
+import type { ClaimableBusinessRole, Photo, Review, Venue, VenueEvent } from '@/types';
 
 /**
  * The single place the app gets venue data from.
@@ -546,4 +546,127 @@ export async function requestPhotoRemoval(input: {
     .insert({ photo_id: input.photoId, requested_by: user.id, reason: input.reason });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * F-BIZ-01 (scoped): self-serve claim. See the migration header for why this
+ * is self-attestation rather than the PRD's real multi-path verification —
+ * it flips `venues.claimed`, never `venues.verified`. The database rejects
+ * the insert outright if the venue already has a business_roles row held by
+ * someone else, which surfaces here as `error`.
+ */
+export async function claimVenue(input: {
+  venueId: string;
+  role: ClaimableBusinessRole;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) {
+    return { ok: false, error: 'No backend configured; this listing could not be claimed.' };
+  }
+
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to claim this listing.' };
+
+  const { error } = await supabase
+    .from('business_roles')
+    .insert({ user_id: user.id, venue_id: input.venueId, role: input.role });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------- auth */
+
+/**
+ * Real Supabase Auth, scoped to a one-time emailed code — no password
+ * field, the same reasoning `app/auth.tsx` already states for why one never
+ * existed. This is the account itself: who you are, real and persisted
+ * across devices. It is deliberately *not* R3's phone/age verification,
+ * which stays self-attested (see `profiles_guard_privileged_columns` in
+ * 20260822000100_init_schema.sql — `phone_verified` and `age_verified` are
+ * server-maintained columns a client can never set, and nothing server-side
+ * in this build sets them either, since there is no real SMS provider wired
+ * up). Signing in for real unblocks photo uploads, removal requests, and
+ * venue claims, which never required verification — reviews, bookings, and
+ * messaging still cannot succeed, since their RLS policies require
+ * `private.is_verified()` and nothing can make that true here.
+ */
+export type AuthProfile = { displayName: string; phoneVerified: boolean; ageVerified: boolean };
+
+function toAuthProfile(
+  row: { display_name: string; phone_verified: boolean; age_verified: boolean } | null,
+): AuthProfile {
+  return row
+    ? { displayName: row.display_name, phoneVerified: row.phone_verified, ageVerified: row.age_verified }
+    : { displayName: 'You', phoneVerified: false, ageVerified: false };
+}
+
+/**
+ * `displayName` only takes effect the first time this email signs in —
+ * `handle_new_user()` seeds `profiles.display_name` from it on account
+ * creation and ignores it on every later code request for the same email.
+ */
+export async function sendSignInCode(input: {
+  email: string;
+  displayName: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is nowhere to send a code.' };
+  const { error } = await supabase.auth.signInWithOtp({
+    email: input.email,
+    options: { data: { display_name: input.displayName } },
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function verifySignInCode(input: {
+  email: string;
+  code: string;
+}): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is no code to verify.' };
+  const { data, error } = await supabase.auth.verifyOtp({ email: input.email, token: input.code, type: 'email' });
+  if (error) return { ok: false, error: error.message };
+  if (!data.user) return { ok: false, error: 'Could not confirm that code.' };
+
+  const { data: row } = await supabase
+    .from('profiles')
+    .select('display_name, phone_verified, age_verified')
+    .eq('id', data.user.id)
+    .maybeSingle();
+  return { ok: true, profile: toAuthProfile(row) };
+}
+
+/** A snapshot of an already-signed-in session, read once at launch. */
+export async function getAuthSnapshot(): Promise<AuthProfile | null> {
+  if (!hasBackend || !supabase) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) return null;
+    const { data: row } = await supabase
+      .from('profiles')
+      .select('display_name, phone_verified, age_verified')
+      .eq('id', user.id)
+      .maybeSingle();
+    return toAuthProfile(row);
+  } catch {
+    return null;
+  }
+}
+
+export async function signOutRemote(): Promise<void> {
+  if (!hasBackend || !supabase) return;
+  await supabase.auth.signOut();
+}
+
+/**
+ * Fires on a real sign-out, including one this device did not initiate —
+ * an expired or revoked refresh token — but not on routine token refresh,
+ * which fires its own event this deliberately ignores.
+ */
+export function onAuthSignedOut(callback: () => void): () => void {
+  if (!hasBackend || !supabase) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') callback();
+  });
+  return () => data.subscription.unsubscribe();
 }

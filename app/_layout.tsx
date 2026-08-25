@@ -43,6 +43,7 @@ function Shell() {
         <Stack.Screen name="community/index" />
         <Stack.Screen name="community/[id]" />
         <Stack.Screen name="photo/new" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="claim/new" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="auth" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
       </Stack>

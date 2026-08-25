@@ -4,8 +4,13 @@ import React, {
 } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { createMessageThread, sendMessage as sendMessageRemote } from '@/data/repository';
+import {
+  createMessageThread, getAuthSnapshot, onAuthSignedOut, sendMessage as sendMessageRemote,
+  sendSignInCode as sendSignInCodeRemote, signOutRemote, verifySignInCode as verifySignInCodeRemote,
+  type AuthProfile,
+} from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
+import { hasBackend } from '@/lib/supabase';
 import { darkTheme, lightTheme, type Theme, type ThemeMode } from '@/theme';
 import type {
   Booking, CheckIn, CheckInVisibility, Collection, FilterState, Message, MessageThread,
@@ -82,8 +87,16 @@ type Ctx = {
   setThemeSetting: (t: ThemeSetting) => void;
 
   session: Session;
+  /** No-backend fallback only: a local, unpersisted-past-this-device identity. */
   signIn: (name: string) => void;
   signOut: () => void;
+  /**
+   * Real Supabase Auth (email one-time code), when a backend is configured.
+   * `sendSignInCode` emails the code; `verifySignInCode` confirms it and,
+   * on success, replaces the local mock session with the real account's.
+   */
+  sendSignInCode: (email: string, displayName: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  verifySignInCode: (email: string, code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   verifyAge: () => void;
   /** Session-scoped: has the age gate been shown at all this session. */
   ageGateSeen: boolean;
@@ -208,6 +221,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefsState] = useState<Preferences>(defaultPrefs);
   const [clockOverride, setClockOverrideState] = useState<number | null>(null);
 
+  const persist = useCallback((key: string, value: unknown) => {
+    AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {
+      /* Offline writes are best-effort; the in-memory copy is authoritative. */
+    });
+  }, []);
+
+  /* ------------------------------------------------------------- session */
+  const updateSession = useCallback(
+    (patch: Partial<Session>) => {
+      setSession((prev) => {
+        const next = { ...prev, ...patch };
+        persist(KEYS.session, next);
+        return next;
+      });
+    },
+    [persist],
+  );
+
+  /** Replaces the local mock session with a real account's, once signed in for real. */
+  const applyAuthProfile = useCallback(
+    (profile: AuthProfile) => {
+      updateSession({
+        role: profile.phoneVerified && profile.ageVerified ? 'verified' : 'registered',
+        name: profile.displayName,
+        phoneVerified: profile.phoneVerified,
+        ageVerified: profile.ageVerified,
+        contributionAttempts: 0,
+      });
+    },
+    [updateSession],
+  );
+
   /* ------------------------------------------------------------- hydrate */
   useEffect(() => {
     (async () => {
@@ -255,17 +300,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setDrafts(read<Record<string, ReviewDraft>>(KEYS.drafts, {}));
         setPrefsState(read<Preferences>(KEYS.prefs, defaultPrefs));
         setRecent(read<string[]>(KEYS.recent, []));
+
+        // Reconcile against the real Supabase Auth session, if a backend is
+        // configured. A locally-remembered "registered"/"verified" role from
+        // before this device had a real account (or from a session that has
+        // since expired) is not carried forward — it was never real.
+        if (hasBackend) {
+          const snapshot = await getAuthSnapshot();
+          if (snapshot) {
+            applyAuthProfile(snapshot);
+          } else {
+            setSession(defaultSession);
+            persist(KEYS.session, defaultSession);
+          }
+        }
       } finally {
         setReady(true);
       }
     })();
   }, []);
 
-  const persist = useCallback((key: string, value: unknown) => {
-    AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {
-      /* Offline writes are best-effort; the in-memory copy is authoritative. */
+  /** Real sign-out this device did not initiate — an expired or revoked session. */
+  useEffect(() => {
+    if (!hasBackend) return;
+    return onAuthSignedOut(() => {
+      setSession(defaultSession);
+      persist(KEYS.session, defaultSession);
     });
-  }, []);
+  }, [persist]);
 
   /* --------------------------------------------------------------- clock */
   const [tick, setTick] = useState(0);
@@ -296,26 +358,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [persist],
   );
 
-  /* ------------------------------------------------------------- session */
-  const updateSession = useCallback(
-    (patch: Partial<Session>) => {
-      setSession((prev) => {
-        const next = { ...prev, ...patch };
-        persist(KEYS.session, next);
-        return next;
-      });
-    },
-    [persist],
-  );
-
   const signIn = useCallback(
     (name: string) => updateSession({ role: 'registered', name, contributionAttempts: 0 }),
     [updateSession],
   );
 
+  const sendSignInCode = useCallback(
+    (email: string, displayName: string) => sendSignInCodeRemote({ email, displayName }),
+    [],
+  );
+
+  const verifySignInCode = useCallback(
+    async (email: string, code: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const result = await verifySignInCodeRemote({ email, code });
+      if (!result.ok) return result;
+      applyAuthProfile(result.profile);
+      return { ok: true };
+    },
+    [applyAuthProfile],
+  );
+
   const signOut = useCallback(() => {
     setSession(defaultSession);
     persist(KEYS.session, defaultSession);
+    if (hasBackend) signOutRemote().catch(() => {});
   }, [persist]);
 
   const verifyAge = useCallback(
@@ -640,6 +706,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       session,
       signIn,
       signOut,
+      sendSignInCode,
+      verifySignInCode,
       verifyAge,
       ageGateSeen,
       markAgeGateSeen: () => setAgeGateSeen(true),
@@ -683,8 +751,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setClockOverride: setClockOverrideState,
     }),
     [
-      ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, verifyAge,
-      ageGateSeen, attemptContribution, filters, setFilters, resetFilters, recentSearches,
+      ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
+      verifySignInCode, verifyAge, ageGateSeen, attemptContribution, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
       follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,
