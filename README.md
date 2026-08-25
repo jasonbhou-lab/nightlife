@@ -39,7 +39,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
 | Business portal | F-BIZ-01 (scoped to self-serve claim) |
-| Usability | U-01 through U-12 |
+| Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
 
@@ -177,6 +177,17 @@ falls back to the original local-only mock unchanged, so the app keeps working o
   cannot become anything else without a real SMS provider — the database actively rejects a client
   attempt to set `phone_verified`/`age_verified` itself. What standard is actually required, and
   whether it differs for browsing versus transacting, is PRD Open Question 3.
+- **No age gate at all (U-12 removed, not just deferred).** The PRD requires one ("Age gating is a
+  single friction point per session, not a repeated interruption," priority M), and this build had
+  one (`src/components/AgeGate.tsx`) until it was deliberately removed. While it existed, its "Yes,
+  I'm 21+" button — reachable by any guest, no sign-in required — called the same `verifyAge()` used
+  by the real phone-verification step, silently granting full `phoneVerified`/`role: 'verified'`
+  status (and therefore booking and review eligibility) to an anonymous guest who never signed in or
+  gave a phone number. Removing the gate removes that path along with it. This is a genuine gap
+  against a must-have requirement for an app whose every venue serves alcohol or permits tobacco,
+  not a cosmetic simplification — treat it as something to revisit with counsel before any of this
+  became a real product, per the PRD's own framing of age standards as an open legal question
+  (Section 9, Open Question 3) rather than a product team's default to set.
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner responses, owner-answer badges,

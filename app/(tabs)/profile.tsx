@@ -65,11 +65,19 @@ export default function ProfileScreen() {
       {session.role === 'guest' ? (
         <View style={gutter()}>
           <Card>
-            <Text style={[font.cardTitle, { color: theme.text }]}>Sign in</Text>
+            <Text style={[font.cardTitle, { color: theme.text }]}>Sign in or sign up</Text>
             <Body dim style={{ marginTop: 4 }}>
-              Needed to write reviews, book, message a venue, or sync saves across devices.
+              Needed to write reviews, book, message a venue, or sync saves across devices. New or
+              returning, it's the same one-time emailed code either way.
             </Body>
             <Button label="Sign in" full style={{ marginTop: space.md }} onPress={() => router.push('/auth')} />
+            <Button
+              label="Sign up"
+              variant="ghost"
+              full
+              style={{ marginTop: space.sm }}
+              onPress={() => router.push('/auth')}
+            />
           </Card>
         </View>
       ) : null}

@@ -320,12 +320,10 @@ export default function HomeScreen() {
                   Reviewing, booking, and saving across devices do. Sign in when you hit one of those,
                   not before.
                 </Body>
-                <Button
-                  label="Sign in"
-                  variant="secondary"
-                  style={{ marginTop: space.md }}
-                  onPress={() => router.push('/auth')}
-                />
+                <View style={[ui.row, { gap: space.sm, marginTop: space.md, flexWrap: 'wrap' }]}>
+                  <Button label="Sign in" variant="secondary" onPress={() => router.push('/auth')} />
+                  <Button label="Sign up" variant="ghost" onPress={() => router.push('/auth')} />
+                </View>
               </View>
             </View>
           </Card>

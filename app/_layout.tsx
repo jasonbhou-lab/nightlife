@@ -4,7 +4,6 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AgeGate } from '@/components/AgeGate';
 import { CatalogueProvider } from '@/data/catalogue';
 import { AppProvider, useApp } from '@/state/AppProvider';
 
@@ -47,8 +46,6 @@ function Shell() {
         <Stack.Screen name="auth" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
       </Stack>
-      {/* U-12: one age check per session, not a repeated interruption. */}
-      <AgeGate />
     </>
   );
 }

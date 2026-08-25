@@ -25,8 +25,6 @@ import type {
  *    readable without connectivity, so they are written to disk, not memory.
  *  - U-09: review drafts autosave and resume across sessions.
  *  - U-10: filter state persists across the session.
- *  - U-12: the age gate is one friction point per session, not a repeated
- *    interruption, so it is session-scoped and not persisted.
  */
 
 const KEYS = {
@@ -98,9 +96,6 @@ type Ctx = {
   sendSignInCode: (email: string, displayName: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   verifySignInCode: (email: string, code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   verifyAge: () => void;
-  /** Session-scoped: has the age gate been shown at all this session. */
-  ageGateSeen: boolean;
-  markAgeGateSeen: () => void;
   /** Returns 'ok' | 'soft_wall' | 'hard_wall'. */
   attemptContribution: () => 'ok' | 'soft_wall';
   canBook: boolean;
@@ -209,7 +204,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [themeSetting, setThemeSettingState] = useState<ThemeSetting>('system');
   const [session, setSession] = useState<Session>(defaultSession);
-  const [ageGateSeen, setAgeGateSeen] = useState(false);
   const [filters, setFiltersState] = useState<FilterState>(emptyFilters);
   const [recentSearches, setRecent] = useState<string[]>([]);
   const [collections, setCollections] = useState<Collection[]>(DEFAULT_COLLECTIONS);
@@ -709,8 +703,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       sendSignInCode,
       verifySignInCode,
       verifyAge,
-      ageGateSeen,
-      markAgeGateSeen: () => setAgeGateSeen(true),
       attemptContribution,
       canBook: session.role === 'verified' || session.role === 'elite',
       filters,
@@ -752,7 +744,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
-      verifySignInCode, verifyAge, ageGateSeen, attemptContribution, filters, setFilters, resetFilters, recentSearches,
+      verifySignInCode, verifyAge, attemptContribution, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
       follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,
