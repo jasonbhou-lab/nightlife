@@ -64,6 +64,7 @@ export default function VenueProfile() {
   const actions = actionsFor(venue);
   const saved = isSaved(venue.id);
   const hh = activeHappyHour(venue, now);
+  const activeOffers = (venue.offers ?? []).filter((o) => !o.endsAt || new Date(o.endsAt).getTime() > now.getTime());
   const events = eventsForVenue(venue.id);
   const recommended = venueReviews(venue.id);
   const hidden = filteredCount(venue.id);
@@ -449,6 +450,38 @@ export default function VenueProfile() {
           ) : null}
         </Card>
       </View>
+
+      {/* F-BIZ-09: self-published offers, not a purchased placement — no
+          budget, targeting, or ranking boost. */}
+      {activeOffers.length || isManagingVenue(venue.id) ? (
+        <View style={gutter()}>
+          <SectionHeader
+            title="Offers"
+            actionLabel={isManagingVenue(venue.id) ? 'Manage' : undefined}
+            onAction={isManagingVenue(venue.id) ? () => router.push(`/venue/offers?venueId=${venue.id}`) : undefined}
+          />
+          {activeOffers.length ? (
+            <Card padded={false}>
+              {activeOffers.map((o, i) => (
+                <View key={o.id}>
+                  {i > 0 ? <Divider /> : null}
+                  <View style={{ padding: space.lg }}>
+                    <Text style={[font.bodyStrong, { color: theme.text }]}>{o.title}</Text>
+                    <Body dim style={{ marginTop: 4 }}>{o.description}</Body>
+                    <Text style={[font.small, { color: theme.textFaint, marginTop: 6 }]}>
+                      {o.endsAt ? `Through ${relativeDate(o.endsAt, now)}` : 'Ongoing'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </Card>
+          ) : (
+            <Card>
+              <Body dim>No offers posted yet.</Body>
+            </Card>
+          )}
+        </View>
+      ) : null}
 
       {/* U-01: the six decision attributes above the fold. */}
       <View style={gutter()}>

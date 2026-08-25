@@ -3,11 +3,11 @@ import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
 import type {
-  BusinessInviteRow, EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
+  BusinessInviteRow, EventRow, PhotoRow, ReviewRow, TableTierRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
   BusinessInvite, ClaimableBusinessRole, HappyHourWindow, InvitableBusinessRole, MenuSection,
-  Photo, Review, Schedule, Venue, VenueEvent,
+  Photo, Review, Schedule, Venue, VenueEvent, VenueOffer,
 } from '@/types';
 
 /**
@@ -164,6 +164,18 @@ function mapReview(row: ReviewRow): Review {
   };
 }
 
+function mapVenueOffer(row: VenueOfferRow): VenueOffer {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    title: row.title,
+    description: row.description,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
 /** A row from the real `photos` table, with its storage path resolved to a public URL. */
 function mapPhotoRow(row: PhotoRow, publicUrl: string): Photo {
   return {
@@ -229,15 +241,17 @@ export async function loadCatalogue(
   if (!hasBackend || !supabase) return seedCatalogue;
 
   try {
-    const [venuesRes, tiersRes, eventsRes, reviewsRes, photosRes] = await Promise.all([
+    const [venuesRes, tiersRes, eventsRes, reviewsRes, photosRes, offersRes] = await Promise.all([
       supabase.from('venues').select('*'),
       supabase.from('table_tiers').select('*'),
       supabase.from('events').select('*'),
       supabase.from('reviews').select('*'),
       supabase.from('photos').select('*'),
+      supabase.from('venue_offers').select('*'),
     ]);
 
-    const firstError = venuesRes.error ?? tiersRes.error ?? eventsRes.error ?? reviewsRes.error ?? photosRes.error;
+    const firstError =
+      venuesRes.error ?? tiersRes.error ?? eventsRes.error ?? reviewsRes.error ?? photosRes.error ?? offersRes.error;
     if (firstError) throw new Error(firstError.message);
 
     const venueRows = venuesRes.data ?? [];
@@ -281,8 +295,19 @@ export async function loadCatalogue(
       return uploaded?.length ? { ...v, photos: [...v.photos, ...uploaded] } : v;
     });
 
+    const offersByVenue = new Map<string, VenueOffer[]>();
+    for (const row of offersRes.data ?? []) {
+      const list = offersByVenue.get(row.venue_id) ?? [];
+      list.push(mapVenueOffer(row));
+      offersByVenue.set(row.venue_id, list);
+    }
+    const withOffers = withUploadedPhotos.map((v) => {
+      const offers = offersByVenue.get(v.id);
+      return offers?.length ? { ...v, offers } : v;
+    });
+
     return {
-      venues: withDistances(withUploadedPhotos, origin, rowsById),
+      venues: withDistances(withOffers, origin, rowsById),
       events: (eventsRes.data ?? []).map(mapEvent),
       reviews: (reviewsRes.data ?? []).map(mapReview),
       source: 'remote',
@@ -746,6 +771,46 @@ export async function updateVenueListing(input: {
     .from('venues')
     .update({ tagline: input.tagline, about: input.about })
     .eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-BIZ-09 (scoped): a self-published offer, not a purchased placement —
+ * see the migration header on 20260826100000_add_venue_offers.sql for why
+ * there is no alcohol/tobacco price-advertising enforcement or targeting
+ * here. The database enforces "only for a venue you manage," same shape as
+ * every other write here.
+ */
+export async function createVenueOffer(input: {
+  venueId: string;
+  title: string;
+  description: string;
+  endsAt?: string;
+}): Promise<{ ok: true; offer: VenueOffer } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the offer could not be posted.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to post an offer.' };
+
+  const { data, error } = await supabase
+    .from('venue_offers')
+    .insert({
+      venue_id: input.venueId,
+      title: input.title,
+      description: input.description,
+      ends_at: input.endsAt ?? null,
+      created_by: user.id,
+    })
+    .select('*')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, offer: mapVenueOffer(data) };
+}
+
+export async function deleteVenueOffer(offerId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to remove.' };
+  const { error } = await supabase.from('venue_offers').delete().eq('id', offerId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

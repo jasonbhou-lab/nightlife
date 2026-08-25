@@ -228,6 +228,17 @@ export type PhotoRow = {
   created_at: string;
 };
 
+export type VenueOfferRow = {
+  id: string;
+  venue_id: string;
+  title: string;
+  description: string;
+  starts_at: string;
+  ends_at: string | null;
+  created_by: string;
+  created_at: string;
+};
+
 export type BusinessInviteRow = {
   id: string;
   venue_id: string;
@@ -331,6 +342,12 @@ export type Database = {
         Row: BusinessInviteRow;
         Insert: Insertable<BusinessInviteRow, 'id' | 'created_at' | 'accepted_at' | 'accepted_by'>;
         Update: Partial<BusinessInviteRow>;
+        Relationships: [];
+      };
+      venue_offers: {
+        Row: VenueOfferRow;
+        Insert: Insertable<VenueOfferRow, 'id' | 'starts_at' | 'ends_at' | 'created_at'>;
+        Update: Partial<VenueOfferRow>;
         Relationships: [];
       };
       message_threads: {

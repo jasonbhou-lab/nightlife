@@ -84,6 +84,21 @@ export type HappyHourWindow = {
   summary: string;
 };
 
+/**
+ * F-BIZ-09, scoped: a self-published offer, not a purchased placement —
+ * there is no budget, targeting, or ranking boost attached (F-BIZ-10 is out
+ * of scope). `endsAt` absent means ongoing rather than time-boxed.
+ */
+export type VenueOffer = {
+  id: string;
+  venueId: string;
+  title: string;
+  description: string;
+  startsAt: string;
+  endsAt?: string;
+  createdAt: string;
+};
+
 export type Photo = {
   id: string;
   album: 'food' | 'drink' | 'interior' | 'exterior' | 'menu' | 'crowd' | 'humidor' | 'stage' | 'table';
@@ -263,6 +278,7 @@ export type Venue = {
   about: string;
   schedules: Schedule[];
   happyHours?: HappyHourWindow[];
+  offers?: VenueOffer[];
   attributes: Record<string, AttributeValue>;
   /** Per-attribute provenance. Falls back to `defaultMeta` when absent. */
   meta: Record<string, AttributeMeta>;

@@ -4,7 +4,9 @@ import { loadCatalogue, type Source } from '@/data/repository';
 import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
-import type { HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent } from '@/types';
+import type {
+  HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent, VenueOffer,
+} from '@/types';
 
 /**
  * The catalogue: venues, events, and reviews, from whichever source is
@@ -66,6 +68,13 @@ type CatalogueCtx = {
    * without waiting on a full `reload()`. See repository.updateVenueListing.
    */
   setVenueListing: (venueId: string, tagline: string, about: string) => void;
+  /**
+   * F-BIZ-09: reflect a just-posted offer, or its removal, in this session
+   * without waiting on a full `reload()`. See repository.createVenueOffer /
+   * deleteVenueOffer.
+   */
+  addVenueOffer: (venueId: string, offer: VenueOffer) => void;
+  removeVenueOffer: (venueId: string, offerId: string) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -135,6 +144,20 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, tagline, about } : v)));
   }, []);
 
+  const addVenueOffer = useCallback((venueId: string, offer: VenueOffer) => {
+    setVenues((prev) =>
+      prev.map((v) => (v.id === venueId ? { ...v, offers: [...(v.offers ?? []), offer] } : v)),
+    );
+  }, []);
+
+  const removeVenueOffer = useCallback((venueId: string, offerId: string) => {
+    setVenues((prev) =>
+      prev.map((v) =>
+        v.id === venueId ? { ...v, offers: (v.offers ?? []).filter((o) => o.id !== offerId) } : v,
+      ),
+    );
+  }, []);
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -177,11 +200,13 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setVenueHours,
       setVenueMenus,
       setVenueListing,
+      addVenueOffer,
+      removeVenueOffer,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
-      setVenueMenus, setVenueListing,
+      setVenueMenus, setVenueListing, addVenueOffer, removeVenueOffer,
     ],
   );
 
