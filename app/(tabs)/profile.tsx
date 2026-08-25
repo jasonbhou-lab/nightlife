@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, Switch, Text, View } from 'react-native';
 
 import { BackendBanner } from '@/components/BackendBanner';
@@ -9,10 +9,12 @@ import {
   ScreenHeader, SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { acceptInvite, deleteInvite, getMyPendingInvites } from '@/data/repository';
 import { RATING_EXPLANATION } from '@/lib/ratings';
 import { formatTime } from '@/lib/hours';
 import { useApp, useTheme, type ThemeSetting } from '@/state/AppProvider';
 import { font, space } from '@/theme';
+import type { BusinessInvite } from '@/types';
 
 /**
  * Profile: contribution history and badges (F-SOCIAL-01), notification
@@ -25,9 +27,31 @@ export default function ProfileScreen() {
   const {
     session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
-    followedMemberIds, followedVenueIds, checkIns,
+    followedMemberIds, followedVenueIds, checkIns, addManagedVenue,
   } = useApp();
   const { reviews, venueById, source } = useCatalogue();
+
+  const [invites, setInvites] = useState<BusinessInvite[]>([]);
+  const [invitesBusy, setInvitesBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session.role === 'guest') return;
+    getMyPendingInvites().then(setInvites);
+  }, [session.role]);
+
+  const respondToInvite = async (invite: BusinessInvite, accept: boolean) => {
+    setInvitesBusy(invite.id);
+    const result = accept
+      ? await acceptInvite({ venueId: invite.venueId, role: invite.role })
+      : await deleteInvite(invite.id);
+    setInvitesBusy(null);
+    if (!result.ok) {
+      Alert.alert(accept ? 'Could not accept' : 'Could not decline', result.error);
+      return;
+    }
+    if (accept) addManagedVenue(invite.venueId);
+    setInvites((prev) => prev.filter((i) => i.id !== invite.id));
+  };
 
   // Notification preferences are per-category and cannot be bundled with
   // transactional messages (F-NOTIF-02).
@@ -97,6 +121,42 @@ export default function ProfileScreen() {
                 <Button label="Verify now" variant="secondary" style={{ marginTop: space.md }} onPress={verifyAge} />
               </View>
             </View>
+          </Card>
+        </View>
+      ) : null}
+
+      {/* F-BIZ-13: pending invites to manage a venue, addressed to this
+          account's own confirmed email. */}
+      {invites.length ? (
+        <View style={gutter()}>
+          <SectionHeader title="Pending invites" />
+          <Card padded={false}>
+            {invites.map((inv, i) => {
+              const venue = venueById[inv.venueId];
+              return (
+                <View key={inv.id}>
+                  {i > 0 ? <Divider /> : null}
+                  <View style={{ padding: space.lg }}>
+                    <Text style={[font.body, { color: theme.text }]}>
+                      {venue?.name ?? 'A venue'} invited you as {inv.role === 'manager' ? 'manager' : 'staff'}
+                    </Text>
+                    <View style={[ui.row, { gap: space.sm, marginTop: space.md }]}>
+                      <Button
+                        label="Accept"
+                        loading={invitesBusy === inv.id}
+                        onPress={() => respondToInvite(inv, true)}
+                      />
+                      <Button
+                        label="Decline"
+                        variant="ghost"
+                        loading={invitesBusy === inv.id}
+                        onPress={() => respondToInvite(inv, false)}
+                      />
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
           </Card>
         </View>
       ) : null}

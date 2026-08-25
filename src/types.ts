@@ -135,10 +135,26 @@ export type TableTier = {
 
 /**
  * F-BIZ-01. Only 'owner' and 'manager' are self-claimable — 'staff' and
- * 'group_admin' presuppose an invite from someone who already holds a role
- * (F-BIZ-13), which this build does not implement.
+ * 'group_admin' presuppose an invite from someone who already holds a role.
  */
 export type ClaimableBusinessRole = 'owner' | 'manager';
+
+/**
+ * F-BIZ-13, scoped. An existing role holder may invite 'manager' or
+ * 'staff' — not 'owner' (that's a claim, not an invite) and not
+ * 'group_admin' (multi-location, F-BIZ-14, is out of scope).
+ */
+export type InvitableBusinessRole = 'manager' | 'staff';
+
+export type BusinessInvite = {
+  id: string;
+  venueId: string;
+  email: string;
+  role: InvitableBusinessRole;
+  invitedBy: string;
+  createdAt: string;
+  acceptedAt?: string;
+};
 
 export type BookingMode =
   /** Restaurant-style reservations with a time grid. */

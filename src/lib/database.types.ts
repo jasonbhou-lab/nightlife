@@ -228,6 +228,17 @@ export type PhotoRow = {
   created_at: string;
 };
 
+export type BusinessInviteRow = {
+  id: string;
+  venue_id: string;
+  email: string;
+  role: BusinessRoleEnum;
+  invited_by: string;
+  created_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+};
+
 export type PhotoRemovalRequestRow = {
   id: string;
   photo_id: string;
@@ -314,6 +325,12 @@ export type Database = {
         Row: { user_id: string; venue_id: string; role: BusinessRoleEnum; created_at: string };
         Insert: { user_id: string; venue_id: string; role: BusinessRoleEnum; created_at?: string };
         Update: Partial<{ user_id: string; venue_id: string; role: BusinessRoleEnum }>;
+        Relationships: [];
+      };
+      business_invites: {
+        Row: BusinessInviteRow;
+        Insert: Insertable<BusinessInviteRow, 'id' | 'created_at' | 'accepted_at' | 'accepted_by'>;
+        Update: Partial<BusinessInviteRow>;
         Relationships: [];
       };
       message_threads: {

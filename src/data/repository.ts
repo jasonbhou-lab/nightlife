@@ -3,10 +3,11 @@ import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
 import type {
-  EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
+  BusinessInviteRow, EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  ClaimableBusinessRole, HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent,
+  BusinessInvite, ClaimableBusinessRole, HappyHourWindow, InvitableBusinessRole, MenuSection,
+  Photo, Review, Schedule, Venue, VenueEvent,
 } from '@/types';
 
 /**
@@ -581,6 +582,89 @@ export async function getManagedVenueIds(): Promise<string[]> {
   if (!hasBackend || !supabase) return [];
   const { data } = await supabase.from('business_roles').select('venue_id');
   return (data ?? []).map((row) => row.venue_id);
+}
+
+function mapBusinessInvite(row: BusinessInviteRow): BusinessInvite {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    email: row.email,
+    role: row.role as InvitableBusinessRole,
+    invitedBy: row.invited_by,
+    createdAt: row.created_at,
+    acceptedAt: row.accepted_at ?? undefined,
+  };
+}
+
+/**
+ * F-BIZ-13 (scoped): invite a manager or staff member by email. See the
+ * migration header on 20260825180000_add_business_invites.sql for how
+ * acceptance works — this only creates the record.
+ */
+export async function inviteToManageVenue(input: {
+  venueId: string;
+  email: string;
+  role: InvitableBusinessRole;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the invite could not be sent.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to invite someone.' };
+
+  const { error } = await supabase
+    .from('business_invites')
+    .insert({ venue_id: input.venueId, email: input.email.trim().toLowerCase(), role: input.role, invited_by: user.id });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Invites this account sent for a venue, pending and accepted alike. */
+export async function getSentInvites(venueId: string): Promise<BusinessInvite[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('business_invites')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: false });
+  return (data ?? []).map(mapBusinessInvite);
+}
+
+/** Pending invites addressed to the signed-in account's own confirmed email. */
+export async function getMyPendingInvites(): Promise<BusinessInvite[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase.from('business_invites').select('*').is('accepted_at', null);
+  return (data ?? []).map(mapBusinessInvite);
+}
+
+/**
+ * Accepting an invite is a real business_roles insert, not a status flip on
+ * the invite row — the database's own guard is what actually checks a
+ * matching invite exists before allowing it (see the migration header on
+ * 20260825180000_add_business_invites.sql), and marks the invite accepted
+ * as a side effect once it succeeds.
+ */
+export async function acceptInvite(input: {
+  venueId: string;
+  role: InvitableBusinessRole;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the invite could not be accepted.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to accept this invite.' };
+
+  const { error } = await supabase
+    .from('business_roles')
+    .insert({ user_id: user.id, venue_id: input.venueId, role: input.role });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Doubles as revoke (sender, before acceptance) and decline (invitee). */
+export async function deleteInvite(inviteId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to remove.' };
+  const { error } = await supabase.from('business_invites').delete().eq('id', inviteId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /**

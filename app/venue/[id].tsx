@@ -33,7 +33,7 @@ export default function VenueProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     now, isSaved, toggleSave, session, canBook, attemptContribution, startThread,
-    isFollowingVenue, toggleFollowVenue, addCheckIn,
+    isFollowingVenue, toggleFollowVenue, addCheckIn, isManagingVenue,
   } = useApp();
   const {
     venues, getVenue, venueReviews, filteredCount, eventsForVenue,
@@ -795,6 +795,21 @@ export default function VenueProfile() {
                   Claimed and {venue.verified ? 'verified' : 'unverified'} owner
                 </Text>
               </View>
+            </>
+          ) : null}
+          {isManagingVenue(venue.id) ? (
+            <>
+              <Divider />
+              <Pressable
+                onPress={() => router.push(`/claim/invite?venueId=${venue.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel="Manage team"
+                style={[ui.row, { gap: space.md, minHeight: 44 }]}
+              >
+                <Ionicons name="people" size={18} color={theme.accent} />
+                <Text style={[font.body, { color: theme.text, flex: 1 }]}>Manage team</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+              </Pressable>
             </>
           ) : null}
         </Card>
