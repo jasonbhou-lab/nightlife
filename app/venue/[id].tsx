@@ -16,6 +16,7 @@ import { communityByName } from '@/data/community';
 import { requestPhotoRemoval } from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
+import { exportVenueData } from '@/lib/export';
 import { actionsFor, categoryLine, freshness, metaFor, priceLabel, relativeDate } from '@/lib/format';
 import {
   activeHappyHour, DAY_LABELS_LONG, formatDuration, formatRange, formatTime, kitchenGap,
@@ -214,6 +215,11 @@ export default function VenueProfile() {
     );
 
   const addPhoto = () => requireAccount(() => router.push(`/photo/new?venueId=${venue.id}`));
+
+  const exportData = () =>
+    exportVenueData(venue, venueReviews(venue.id, true)).catch(() =>
+      Alert.alert('Could not export', 'Something went wrong preparing the file.'),
+    );
 
   const requestRemoval = (photo: Photo) =>
     requireAccount(() =>
@@ -812,6 +818,17 @@ export default function VenueProfile() {
               >
                 <Ionicons name="people" size={18} color={theme.accent} />
                 <Text style={[font.body, { color: theme.text, flex: 1 }]}>Manage team</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+              </Pressable>
+              <Divider />
+              <Pressable
+                onPress={exportData}
+                accessibilityRole="button"
+                accessibilityLabel="Export venue data"
+                style={[ui.row, { gap: space.md, minHeight: 44 }]}
+              >
+                <Ionicons name="download" size={18} color={theme.accent} />
+                <Text style={[font.body, { color: theme.text, flex: 1 }]}>Export venue data</Text>
                 <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
               </Pressable>
             </>

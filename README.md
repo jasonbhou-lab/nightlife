@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 03, 04, 05, 07, 13 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 03, 04, 05, 07, 13, 15 (each scoped down — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
@@ -234,6 +234,19 @@ version of this migration rejected every tagline edit outright for changing a co
 know was a legitimate side effect. Fixed by adding `search_text` to the allowlist alongside
 `tagline` itself.
 
+**Own-data export** (`src/lib/export.ts`, F-BIZ-15, scoped). A managing account downloads its own
+venue's reviews received, media, and listing basics as JSON. Left out on purpose: "analytics" —
+there is no page-view/impression tracking anywhere in this build to export, the same honesty gap
+as F-BIZ-08 — and the team roster/sent invites, since `business_invites_select`'s RLS only lets
+the signed-in account see invites *it* sent, so a multi-manager venue would export a silently
+incomplete team list rather than a complete one. Everything included here (reviews, photos) is
+already public; this packages it for the business rather than granting new access. Web gets a real
+file download; native gets the OS share sheet with the same JSON as text, since there's no
+file-download API to reach for without a new dependency and the PRD makes web the primary business
+portal surface anyway. The one feature in this list verifiable fully end-to-end in this sandbox,
+since it never touches the backend at all — confirmed live by spying on `URL.createObjectURL` and
+reading the resulting blob back.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -261,15 +274,16 @@ know was a legitimate side effect. Fixed by adding `search_text` to the allowlis
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner-answer badges, paid-placement
-  labels, claimed/unclaimed states, closure and successor handling. Six exceptions are real,
+  labels, claimed/unclaimed states, closure and successor handling. Seven exceptions are real,
   scoped-down business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim
   step (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about
   editor (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-07's review response composer (no sentiment summary,
-  keyword themes, or alerting), and F-BIZ-13's invite-a-manager flow (manager/staff only, no
-  access audit log). Everything else — the typed attributes themselves, media management,
-  analytics, and the rest of F-BIZ-02 through 15 — has no dashboard here at all.
+  keyword themes, or alerting), F-BIZ-13's invite-a-manager flow (manager/staff only, no access
+  audit log), and F-BIZ-15's own-data export (reviews and media, not analytics — there is none to
+  export — and not the team roster). Everything else — the typed attributes themselves, media
+  management, analytics, and the rest of F-BIZ-02 through 15 — has no dashboard here at all.
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery
