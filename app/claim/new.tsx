@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import {
@@ -35,6 +35,13 @@ export default function ClaimVenueScreen() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // A one-time effect of viewing this gate, not something to redo every
+  // render — calling it directly in the render body would change `session`,
+  // re-rendering this component, which would call it again forever.
+  useEffect(() => {
+    if (session.role === 'guest') attemptContribution();
+  }, []);
+
   if (!venue) {
     return (
       <Screen>
@@ -44,7 +51,6 @@ export default function ClaimVenueScreen() {
   }
 
   if (session.role === 'guest') {
-    attemptContribution();
     return (
       <Screen contentStyle={{ gap: space.lg }}>
         <ScreenHeader title="Claim this listing" subtitle={venue.name} onBack={() => router.back()} />

@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01 (scoped to self-serve claim), F-BIZ-07 (scoped to a response composer) |
+| Business portal | F-BIZ-01, 04, 07 (each scoped down — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
@@ -176,6 +176,25 @@ query, not a guess), and the database — not the client — rejects an update f
 touches anything on the review besides the response, so this can never become a backdoor to edit
 someone else's review.
 
+**Hours and happy hour editor** (`app/hours/edit.tsx`, F-BIZ-04, scoped). Dropped from the full
+requirement: bulk/multi-location editing (F-BIZ-14 is out of scope, so there's nowhere to
+bulk-apply to) and temporary closure scheduling (`closure_state`/`closure_note` are Trust &
+Safety's field per F-PROFILE-12, not a business self-declaration). `venues` had no write policy at
+all before this — not even for the account that claimed it. The guard trigger is a jsonb diff, not
+an exhaustive column list: it allows a change to `schedules`, `happy_hours`, or `updated_at`, and
+rejects the update outright if anything else on the row differs, so confirming hours can never
+quietly become rewriting the venue's name, address, or claimed/verified flags through the same
+door. The happy-hour summary field is free text and unmoderated — the screen carries the same
+per-jurisdiction drink-pricing caveat the read-only hours screen already showed, rather than
+pretending to enforce rules it can't.
+
+Building this surfaced a real bug in three existing "sign in to continue" screens
+(`app/photo/new.tsx`, `app/claim/new.tsx`, and this new one): each called `attemptContribution()`
+directly in the render body when the session was a guest, which increments session state, which
+re-renders the component, which called it again — an infinite loop (React's "Maximum update depth
+exceeded") that this browser hit live. Fixed in all three by moving the call into a one-time
+`useEffect`, not just the new screen.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -203,12 +222,13 @@ someone else's review.
 - **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
   scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
   visible *outputs* are implemented: Consumer Alert banners, owner-answer badges, paid-placement
-  labels, claimed/unclaimed states, closure and successor handling. Two exceptions are real,
+  labels, claimed/unclaimed states, closure and successor handling. Three exceptions are real,
   scoped-down business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim
-  step (self-attestation, not the PRD's actual verification paths) and F-BIZ-07's review response
-  composer (no sentiment summary, keyword themes, or alerting). Everything else — the listing
-  editor, hours/menu/media management, analytics, and the rest of F-BIZ-02 through 15 — has no
-  dashboard here at all.
+  step (self-attestation, not the PRD's actual verification paths), F-BIZ-04's hours/happy-hour
+  editor (no bulk/multi-location, no closure scheduling), and F-BIZ-07's review response composer
+  (no sentiment summary, keyword themes, or alerting). Everything else — the rest of the listing
+  editor, menu/media management, analytics, and the rest of F-BIZ-02 through 15 — has no dashboard
+  here at all.
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery

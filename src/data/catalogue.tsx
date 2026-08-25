@@ -4,7 +4,7 @@ import { loadCatalogue, type Source } from '@/data/repository';
 import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
-import type { Photo, Review, Venue, VenueEvent } from '@/types';
+import type { HappyHourWindow, Photo, Review, Schedule, Venue, VenueEvent } from '@/types';
 
 /**
  * The catalogue: venues, events, and reviews, from whichever source is
@@ -51,6 +51,11 @@ type CatalogueCtx = {
    * waiting on a full `reload()`. See repository.respondToReview.
    */
   setReviewOwnerResponse: (reviewId: string, response: { text: string; date: string }) => void;
+  /**
+   * F-BIZ-04: reflect a just-saved hours edit in this session without
+   * waiting on a full `reload()`. See repository.updateVenueHours.
+   */
+  setVenueHours: (venueId: string, schedules: Schedule[], happyHours: HappyHourWindow[]) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -103,6 +108,15 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const setVenueHours = useCallback(
+    (venueId: string, schedules: Schedule[], happyHours: HappyHourWindow[]) => {
+      setVenues((prev) =>
+        prev.map((v) => (v.id === venueId ? { ...v, schedules, happyHours } : v)),
+      );
+    },
+    [],
+  );
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -142,10 +156,11 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       addLocalPhoto,
       markVenueClaimed,
       setReviewOwnerResponse,
+      setVenueHours,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
-      eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse,
+      eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
     ],
   );
 

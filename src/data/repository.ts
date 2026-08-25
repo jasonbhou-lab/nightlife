@@ -5,7 +5,9 @@ import { hasBackend, supabase } from '@/lib/supabase';
 import type {
   EventRow, PhotoRow, ReviewRow, TableTierRow, VenueRow,
 } from '@/lib/database.types';
-import type { ClaimableBusinessRole, Photo, Review, Venue, VenueEvent } from '@/types';
+import type {
+  ClaimableBusinessRole, HappyHourWindow, Photo, Review, Schedule, Venue, VenueEvent,
+} from '@/types';
 
 /**
  * The single place the app gets venue data from.
@@ -603,6 +605,27 @@ export async function respondToReview(input: {
     ok: true,
     response: { text: data.owner_response ?? input.text, date: (data.owner_response_at ?? new Date().toISOString()).slice(0, 10) },
   };
+}
+
+/**
+ * F-BIZ-04 (scoped): overwrite a managed venue's hours and happy hours.
+ * The database — not this function — is what actually enforces "only these
+ * two fields, only for a venue you manage" (see
+ * 20260825160000_add_venue_hours_edit.sql), the same shape as every other
+ * write here.
+ */
+export async function updateVenueHours(input: {
+  venueId: string;
+  schedules: Schedule[];
+  happyHours: HappyHourWindow[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; hours could not be updated.' };
+  const { error } = await supabase
+    .from('venues')
+    .update({ schedules: input.schedules as never, happy_hours: input.happyHours as never })
+    .eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------- auth */

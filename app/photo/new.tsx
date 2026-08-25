@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Image, Text, TextInput, View } from 'react-native';
 
 import { albumLabel } from '@/components/PhotoTile';
@@ -36,6 +36,14 @@ export default function NewPhotoScreen() {
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
 
+  // Registering a contribution attempt is a one-time effect of viewing this
+  // gate, not something to redo on every render — calling it unconditionally
+  // in the render body changes `session`, which re-renders this component,
+  // which would call it again forever ("Maximum update depth exceeded").
+  useEffect(() => {
+    if (session.role === 'guest') attemptContribution();
+  }, []);
+
   if (!venue) {
     return (
       <Screen>
@@ -45,7 +53,6 @@ export default function NewPhotoScreen() {
   }
 
   if (session.role === 'guest') {
-    attemptContribution();
     return (
       <Screen contentStyle={{ gap: space.lg }}>
         <ScreenHeader title="Add a photo" subtitle={venue.name} onBack={() => router.back()} />

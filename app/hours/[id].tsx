@@ -3,7 +3,8 @@ import React from 'react';
 import { Text, View } from 'react-native';
 
 import {
-  Body, Callout, Card, Divider, gutter, Label, Screen, ScreenHeader, SectionHeader, styles as ui,
+  Body, Button, Callout, Card, Divider, gutter, Label, Screen, ScreenHeader, SectionHeader,
+  styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { relativeDate } from '@/lib/format';
@@ -25,7 +26,7 @@ export default function HoursScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { now } = useApp();
+  const { now, isManagingVenue } = useApp();
   const { getVenue } = useCatalogue();
   const venue = getVenue(id);
 
@@ -43,6 +44,17 @@ export default function HoursScreen() {
   return (
     <Screen contentStyle={{ gap: space.xl }}>
       <ScreenHeader title="Hours" subtitle={venue.name} onBack={() => router.back()} />
+
+      {isManagingVenue(venue.id) ? (
+        <View style={gutter()}>
+          <Button
+            label="Edit hours"
+            icon="create-outline"
+            variant="secondary"
+            onPress={() => router.push(`/hours/edit?venueId=${venue.id}`)}
+          />
+        </View>
+      ) : null}
 
       {kitchenGap(venue, now) ? (
         <View style={gutter()}>
