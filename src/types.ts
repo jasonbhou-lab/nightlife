@@ -171,6 +171,53 @@ export type BusinessInvite = {
   acceptedAt?: string;
 };
 
+/**
+ * F-TRUST, scoped. There is no self-serve claim for a platform role the way
+ * business_roles has one — a row is granted directly in the database (see
+ * the migration header on 20260826110000_add_trust_and_safety.sql). Moderator
+ * works the reviews queue; trust_safety adds Consumer Alerts, freezing
+ * contribution on a listing, and resolving what a moderator escalates.
+ */
+export type PlatformRole = 'moderator' | 'trust_safety';
+
+export type ReportReason =
+  | 'not_a_real_visit' | 'conflict_of_interest' | 'harassment_or_hate_speech'
+  | 'privacy_violation' | 'irrelevant_or_promotional';
+
+export type ReportStatus = 'pending' | 'dismissed' | 'removed' | 'escalated';
+
+/**
+ * Deliberately not denormalized with the reported review's own text or venue —
+ * the moderation queue cross-references `reviewId` against the reviews the
+ * catalogue already has loaded (`useCatalogue().reviews`), the same
+ * device-side-join convention the rest of this app's repository layer uses
+ * rather than a PostgREST embedded join.
+ */
+export type ContentReport = {
+  id: string;
+  reviewId: string;
+  reporterId: string;
+  reason: ReportReason;
+  status: ReportStatus;
+  createdAt: string;
+  resolvedAt?: string;
+};
+
+export type ModerationActionKind =
+  | 'report_dismissed' | 'report_escalated' | 'review_removed' | 'review_restored'
+  | 'consumer_alert_applied' | 'consumer_alert_cleared'
+  | 'contribution_frozen' | 'contribution_unfrozen';
+
+export type ModerationAction = {
+  id: string;
+  action: ModerationActionKind;
+  reviewId?: string;
+  reportId?: string;
+  venueId?: string;
+  note?: string;
+  createdAt: string;
+};
+
 export type BookingMode =
   /** Restaurant-style reservations with a time grid. */
   | 'reservation'
@@ -272,6 +319,8 @@ export type Venue = {
   closure?: { state: 'temporary' | 'permanent' | 'moved' | 'seasonal'; note: string; successorId?: string };
   /** F-PROFILE-11 — applied by Trust & Safety, never by Sales. */
   consumerAlert?: string;
+  /** F-TRUST-04 / R12: Trust & Safety can freeze new reviews on a listing. */
+  contributionFrozen?: boolean;
   /** Paid placement. Always labeled (F-SEARCH-09, U-11). */
   promoted?: boolean;
   tagline: string;

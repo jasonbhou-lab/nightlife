@@ -114,6 +114,22 @@ export default function NewReviewScreen() {
     );
   }
 
+  // F-TRUST-04 / R12: a courtesy copy of the same freeze the database itself
+  // enforces on the insert — see reviews_insert_own in
+  // 20260826110000_add_trust_and_safety.sql.
+  if (venue.contributionFrozen) {
+    return (
+      <Screen contentStyle={{ gap: space.lg }}>
+        <ScreenHeader title="Write a review" subtitle={venue.name} onBack={() => router.back()} />
+        <View style={gutter()}>
+          <Callout tone="warn" icon="snow" title="New reviews are paused here">
+            <Body dim>Trust &amp; Safety has temporarily frozen new contributions at this listing.</Body>
+          </Callout>
+        </View>
+      </Screen>
+    );
+  }
+
   if (submitted) {
     return (
       <Screen contentStyle={{ gap: space.lg }}>

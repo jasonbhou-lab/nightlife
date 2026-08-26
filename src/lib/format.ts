@@ -1,6 +1,6 @@
 import { attributeByKey } from '@/data/attributes';
 import { verticalMeta } from '@/data/taxonomy';
-import type { AttributeValue, BookingMode, Provenance, Venue, Vertical } from '@/types';
+import type { AttributeValue, BookingMode, Provenance, ReportReason, Venue, Vertical } from '@/types';
 import { formatTime } from '@/lib/hours';
 
 /** Value rendering, provenance/staleness, and the category-adaptive action set. */
@@ -58,6 +58,16 @@ export const DIET_LABELS: Record<string, string> = {
   halal: 'Halal',
   kosher: 'Kosher',
   nut_free_kitchen: 'Nut-free kitchen',
+};
+
+/** F-REVIEW-10's typed reasons, shared between the report action sheet and
+ * the moderation queue so the two never drift. */
+export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
+  not_a_real_visit: 'Not a real visit',
+  conflict_of_interest: 'Conflict of interest',
+  harassment_or_hate_speech: 'Harassment or hate speech',
+  privacy_violation: 'Privacy violation',
+  irrelevant_or_promotional: 'Irrelevant or promotional',
 };
 
 /* ------------------------------------------------------------ provenance */

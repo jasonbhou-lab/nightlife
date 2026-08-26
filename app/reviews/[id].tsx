@@ -10,14 +10,14 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
-import { respondToReview } from '@/data/repository';
-import { relativeDate } from '@/lib/format';
+import { reportReview, respondToReview } from '@/data/repository';
+import { relativeDate, REPORT_REASON_LABELS } from '@/lib/format';
 import {
   aggregateFor, FILTERED_EXPLANATION, RATING_EXPLANATION, subRatingDimensions,
 } from '@/lib/ratings';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
-import type { Review } from '@/types';
+import type { ReportReason, Review } from '@/types';
 
 /**
  * All reviews for a venue.
@@ -271,11 +271,13 @@ function ReviewCard({
 }) {
   const theme = useTheme();
   const router = useRouter();
+  const { session, attemptContribution } = useApp();
   const [voted, setVoted] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState(r.ownerResponse?.text ?? '');
   const [posting, setPosting] = useState(false);
   const [respondError, setRespondError] = useState<string | null>(null);
+  const [reported, setReported] = useState(false);
   const member = communityByName[r.author];
 
   const postResponse = async () => {
@@ -289,6 +291,47 @@ function ReviewCard({
       return;
     }
     setComposing(false);
+  };
+
+  /**
+   * F-REVIEW-10 / F-TRUST-01. This used to be a local Alert.alert with no
+   * submission at all — the reasons below existed but nothing was ever sent
+   * anywhere. Reporting only needs a signed-in account, not a verified one
+   * (see reportReview's own comment): a safety action should not sit behind
+   * the same wall as writing content.
+   */
+  const openReport = () => {
+    if (session.role === 'guest') {
+      attemptContribution();
+      Alert.alert('Sign in required', 'Reporting a review needs an account.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Sign in', onPress: () => router.push('/auth') },
+      ]);
+      return;
+    }
+    if (reported) {
+      Alert.alert('Already reported', 'You already reported this review — it is in the moderation queue.');
+      return;
+    }
+    Alert.alert(
+      'Report this review',
+      'Pick the reason that fits',
+      [
+        ...(Object.entries(REPORT_REASON_LABELS) as [ReportReason, string][]).map(([reason, label]) => ({
+          text: label,
+          onPress: async () => {
+            const result = await reportReview({ reviewId: r.id, reason });
+            if (result.ok) {
+              setReported(true);
+              Alert.alert('Reported', 'Thanks — this has been sent to the moderation queue.');
+            } else {
+              Alert.alert('Could not report this', result.error);
+            }
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+    );
   };
 
   return (
@@ -463,21 +506,12 @@ function ReviewCard({
         )}
         <View style={{ flex: 1 }} />
         <Pressable
-          onPress={() =>
-            Alert.alert('Report this review', 'Pick the reason that fits', [
-              { text: 'Not a real visit' },
-              { text: 'Conflict of interest' },
-              { text: 'Harassment or hate speech' },
-              { text: 'Privacy violation' },
-              { text: 'Irrelevant or promotional' },
-              { text: 'Cancel', style: 'cancel' },
-            ])
-          }
+          onPress={openReport}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Report this review"
+          accessibilityLabel={reported ? 'Already reported' : 'Report this review'}
         >
-          <Ionicons name="flag-outline" size={15} color={theme.textFaint} />
+          <Ionicons name={reported ? 'flag' : 'flag-outline'} size={15} color={reported ? theme.accent : theme.textFaint} />
         </Pressable>
       </View>
     </Card>

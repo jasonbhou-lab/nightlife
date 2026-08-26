@@ -5,7 +5,7 @@ import React, {
 import { useColorScheme } from 'react-native';
 
 import {
-  createMessageThread, getAuthSnapshot, getManagedVenueIds, onAuthSignedOut,
+  createMessageThread, getAuthSnapshot, getManagedVenueIds, getPlatformRoles, onAuthSignedOut,
   sendMessage as sendMessageRemote, sendSignInCode as sendSignInCodeRemote, signOutRemote,
   verifySignInCode as verifySignInCodeRemote, type AuthProfile,
 } from '@/data/repository';
@@ -14,7 +14,7 @@ import { hasBackend } from '@/lib/supabase';
 import { darkTheme, lightTheme, type Theme, type ThemeMode } from '@/theme';
 import type {
   Booking, CheckIn, CheckInVisibility, Collection, FilterState, Message, MessageThread,
-  MessageThreadKind, Preferences, QuoteIntake, ReviewDraft, SessionRole,
+  MessageThreadKind, PlatformRole, Preferences, QuoteIntake, ReviewDraft, SessionRole,
 } from '@/types';
 
 /**
@@ -105,6 +105,12 @@ type Ctx = {
   isManagingVenue: (venueId: string) => boolean;
   /** Optimistic: reflects a just-succeeded claim before the next refetch. */
   addManagedVenue: (venueId: string) => void;
+
+  /** F-TRUST: platform roles this account holds. No self-serve path — see
+   * getPlatformRoles' own comment for why. */
+  platformRoles: PlatformRole[];
+  isModerator: boolean;
+  isTrustSafety: boolean;
 
   filters: FilterState;
   setFilters: (f: FilterState) => void;
@@ -221,6 +227,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefsState] = useState<Preferences>(defaultPrefs);
   const [clockOverride, setClockOverrideState] = useState<number | null>(null);
   const [managedVenueIds, setManagedVenueIds] = useState<string[]>([]);
+  const [platformRoles, setPlatformRoles] = useState<PlatformRole[]>([]);
 
   const persist = useCallback((key: string, value: unknown) => {
     AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {
@@ -311,6 +318,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (snapshot) {
             applyAuthProfile(snapshot);
             setManagedVenueIds(await getManagedVenueIds());
+            setPlatformRoles(await getPlatformRoles());
           } else {
             setSession(defaultSession);
             persist(KEYS.session, defaultSession);
@@ -329,6 +337,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSession(defaultSession);
       persist(KEYS.session, defaultSession);
       setManagedVenueIds([]);
+      setPlatformRoles([]);
     });
   }, [persist]);
 
@@ -377,6 +386,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!result.ok) return result;
       applyAuthProfile(result.profile);
       getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
+      getPlatformRoles().then(setPlatformRoles).catch(() => {});
       return { ok: true };
     },
     [applyAuthProfile],
@@ -386,6 +396,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSession(defaultSession);
     persist(KEYS.session, defaultSession);
     setManagedVenueIds([]);
+    setPlatformRoles([]);
     if (hasBackend) signOutRemote().catch(() => {});
   }, [persist]);
 
@@ -729,6 +740,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       managedVenueIds,
       isManagingVenue,
       addManagedVenue,
+      platformRoles,
+      isModerator: platformRoles.includes('moderator'),
+      isTrustSafety: platformRoles.includes('trust_safety'),
       filters,
       setFilters,
       resetFilters,
@@ -769,7 +783,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
       verifySignInCode, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
-      addManagedVenue, filters, setFilters, resetFilters, recentSearches,
+      addManagedVenue, platformRoles, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
       follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,

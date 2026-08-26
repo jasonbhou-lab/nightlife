@@ -75,6 +75,19 @@ type CatalogueCtx = {
    */
   addVenueOffer: (venueId: string, offer: VenueOffer) => void;
   removeVenueOffer: (venueId: string, offerId: string) => void;
+  /**
+   * F-TRUST-01: reflect a just-moderated review (removed or restored) in this
+   * session without waiting on a full `reload()`. See repository.moderateReport
+   * / restoreReview.
+   */
+  setReviewRecommended: (reviewId: string, recommended: boolean) => void;
+  /**
+   * F-TRUST-04: reflect a just-applied or -cleared Consumer Alert, or a
+   * contribution freeze/unfreeze, in this session without waiting on a full
+   * `reload()`. See repository.setConsumerAlert / setContributionFrozen.
+   */
+  setVenueConsumerAlert: (venueId: string, alert: string | undefined) => void;
+  setVenueContributionFrozen: (venueId: string, frozen: boolean) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -158,6 +171,20 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const setReviewRecommended = useCallback((reviewId: string, recommended: boolean) => {
+    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, recommended } : r)));
+  }, []);
+
+  const setVenueConsumerAlert = useCallback((venueId: string, alert: string | undefined) => {
+    setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, consumerAlert: alert } : v)));
+  }, []);
+
+  const setVenueContributionFrozen = useCallback((venueId: string, frozen: boolean) => {
+    setVenues((prev) =>
+      prev.map((v) => (v.id === venueId ? { ...v, contributionFrozen: frozen || undefined } : v)),
+    );
+  }, []);
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -202,11 +229,15 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setVenueListing,
       addVenueOffer,
       removeVenueOffer,
+      setReviewRecommended,
+      setVenueConsumerAlert,
+      setVenueContributionFrozen,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
-      setVenueMenus, setVenueListing, addVenueOffer, removeVenueOffer,
+      setVenueMenus, setVenueListing, addVenueOffer, removeVenueOffer, setReviewRecommended,
+      setVenueConsumerAlert, setVenueContributionFrozen,
     ],
   );
 

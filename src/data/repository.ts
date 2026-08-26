@@ -3,11 +3,13 @@ import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
 import type {
-  BusinessInviteRow, EventRow, PhotoRow, ReviewRow, TableTierRow, VenueOfferRow, VenueRow,
+  BusinessInviteRow, ContentReportRow, EventRow, ModerationActionRow, PhotoRow, ReviewRow,
+  TableTierRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  BusinessInvite, ClaimableBusinessRole, HappyHourWindow, InvitableBusinessRole, MenuSection,
-  Photo, Review, Schedule, Venue, VenueEvent, VenueOffer,
+  BusinessInvite, ClaimableBusinessRole, ContentReport, HappyHourWindow, InvitableBusinessRole,
+  MenuSection, ModerationAction, Photo, PlatformRole, ReportReason, Review, Schedule, Venue,
+  VenueEvent, VenueOffer,
 } from '@/types';
 
 /**
@@ -84,6 +86,7 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
         }
       : undefined,
     consumerAlert: row.consumer_alert ?? undefined,
+    contributionFrozen: row.contribution_frozen || undefined,
     promoted: row.promoted || undefined,
     tagline: row.tagline ?? '',
     about: row.about ?? '',
@@ -172,6 +175,30 @@ function mapVenueOffer(row: VenueOfferRow): VenueOffer {
     description: row.description,
     startsAt: row.starts_at,
     endsAt: row.ends_at ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function mapContentReport(row: ContentReportRow): ContentReport {
+  return {
+    id: row.id,
+    reviewId: row.review_id,
+    reporterId: row.reporter_id,
+    reason: row.reason,
+    status: row.status,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at ?? undefined,
+  };
+}
+
+function mapModerationAction(row: ModerationActionRow): ModerationAction {
+  return {
+    id: row.id,
+    action: row.action,
+    reviewId: row.review_id ?? undefined,
+    reportId: row.report_id ?? undefined,
+    venueId: row.venue_id ?? undefined,
+    note: row.note ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -813,6 +840,106 @@ export async function deleteVenueOffer(offerId: string): Promise<{ ok: true } | 
   const { error } = await supabase.from('venue_offers').delete().eq('id', offerId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/* -------------------------------------------------------------------- F-TRUST */
+
+/** Platform roles (moderator, trust_safety) this account holds — see the
+ * migration header on 20260826110000_add_trust_and_safety.sql for why there
+ * is no self-serve path to acquire one, the same shape as getManagedVenueIds
+ * above but with nothing analogous to a claim. */
+export async function getPlatformRoles(): Promise<PlatformRole[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase.from('platform_roles').select('role');
+  return (data ?? []).map((row) => row.role);
+}
+
+/**
+ * F-REVIEW-10. Reporting only needs a signed-in account (private.is_verified()
+ * is not part of the insert policy) — a safety action should not sit behind
+ * the same wall as writing content.
+ */
+export async function reportReview(input: {
+  reviewId: string;
+  reason: ReportReason;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the report was not sent.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to report this review.' };
+
+  const { error } = await supabase
+    .from('content_reports')
+    .insert({ review_id: input.reviewId, reporter_id: user.id, reason: input.reason });
+  if (error) {
+    if (error.code === '23505') return { ok: false, error: 'You already reported this review.' };
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** F-TRUST-01: every report a moderator or trust_safety account can see — RLS
+ * restricts a non-platform-role account to only its own reports. */
+export async function getModerationQueue(): Promise<ContentReport[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase.from('content_reports').select('*').order('created_at', { ascending: false });
+  return (data ?? []).map(mapContentReport);
+}
+
+/**
+ * F-TRUST-01/08. The single write a moderator or trust_safety account makes
+ * to resolve a report — content_reports_apply_moderation() is what actually
+ * flips the review's `recommended` flag and writes the audit entry as a side
+ * effect, atomically, and what actually enforces which role may make which
+ * transition (see the migration header). This just sends the new status.
+ */
+export async function moderateReport(input: {
+  reportId: string;
+  status: 'dismissed' | 'removed' | 'escalated';
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to update.' };
+  const { error } = await supabase.from('content_reports').update({ status: input.status }).eq('id', input.reportId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Restoring a removed review reuses the same transition machinery (removed -> dismissed). */
+export async function restoreReview(reportId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  return moderateReport({ reportId, status: 'dismissed' });
+}
+
+/**
+ * F-TRUST-04, trust_safety only. `alert` null clears it. The database — not
+ * this function — is what actually restricts this to exactly these two
+ * columns for a trust_safety account (venues_guard_owner_write's second
+ * branch) and writes the audit entry as a side effect.
+ */
+export async function setConsumerAlert(input: {
+  venueId: string;
+  alert: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the alert could not be updated.' };
+  const { error } = await supabase.from('venues').update({ consumer_alert: input.alert }).eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** F-TRUST-04 / R12: "freeze contribution on a listing." */
+export async function setContributionFrozen(input: {
+  venueId: string;
+  frozen: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
+  const { error } = await supabase.from('venues').update({ contribution_frozen: input.frozen }).eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** F-TRUST-08: the immutable audit log, read-only here — moderator/trust_safety only. */
+export async function getModerationHistory(): Promise<ModerationAction[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase.from('moderation_actions').select('*').order('created_at', { ascending: false }).limit(100);
+  return (data ?? []).map(mapModerationAction);
 }
 
 /* ------------------------------------------------------------------- auth */

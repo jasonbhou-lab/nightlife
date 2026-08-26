@@ -32,6 +32,15 @@ export type PhotoAlbumEnum =
   | 'food' | 'drink' | 'interior' | 'exterior' | 'menu' | 'crowd' | 'humidor' | 'stage' | 'table';
 export type PhotoCreditEnum = 'owner' | 'community';
 export type BusinessRoleEnum = 'owner' | 'manager' | 'staff' | 'group_admin';
+export type PlatformRoleEnum = 'moderator' | 'trust_safety';
+export type ReportReasonEnum =
+  | 'not_a_real_visit' | 'conflict_of_interest' | 'harassment_or_hate_speech'
+  | 'privacy_violation' | 'irrelevant_or_promotional';
+export type ReportStatusEnum = 'pending' | 'dismissed' | 'removed' | 'escalated';
+export type ModerationActionKindEnum =
+  | 'report_dismissed' | 'report_escalated' | 'review_removed' | 'review_restored'
+  | 'consumer_alert_applied' | 'consumer_alert_cleared'
+  | 'contribution_frozen' | 'contribution_unfrozen';
 
 export type VenueRow = {
   id: string;
@@ -76,6 +85,8 @@ export type VenueRow = {
   booking_terms: string | null;
   /** F-MSG-01: published response-time metric, shown on the profile and composer. */
   avg_response_minutes: number | null;
+  /** F-PROFILE-11 / F-TRUST-04, both writable only by trust_safety. */
+  contribution_frozen: boolean;
   search_text: string | null;
   created_at: string;
   updated_at: string;
@@ -258,6 +269,35 @@ export type PhotoRemovalRequestRow = {
   created_at: string;
 };
 
+export type PlatformRoleRow = {
+  user_id: string;
+  role: PlatformRoleEnum;
+  created_at: string;
+};
+
+export type ContentReportRow = {
+  id: string;
+  review_id: string;
+  reporter_id: string;
+  reason: ReportReasonEnum;
+  note: string | null;
+  status: ReportStatusEnum;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+};
+
+export type ModerationActionRow = {
+  id: string;
+  actor_id: string | null;
+  action: ModerationActionKindEnum;
+  review_id: string | null;
+  report_id: string | null;
+  venue_id: string | null;
+  note: string | null;
+  created_at: string;
+};
+
 /** Insert shapes: server-defaulted and server-maintained columns are omitted. */
 type Insertable<T, Optional extends keyof T> = Omit<T, Optional> & Partial<Pick<T, Optional>>;
 
@@ -377,6 +417,24 @@ export type Database = {
         Update: Partial<PhotoRemovalRequestRow>;
         Relationships: [];
       };
+      platform_roles: {
+        Row: PlatformRoleRow;
+        Insert: Insertable<PlatformRoleRow, 'created_at'>;
+        Update: Partial<PlatformRoleRow>;
+        Relationships: [];
+      };
+      content_reports: {
+        Row: ContentReportRow;
+        Insert: Insertable<ContentReportRow, 'id' | 'note' | 'status' | 'created_at' | 'resolved_at' | 'resolved_by'>;
+        Update: Partial<ContentReportRow>;
+        Relationships: [];
+      };
+      moderation_actions: {
+        Row: ModerationActionRow;
+        Insert: Insertable<ModerationActionRow, 'id' | 'note' | 'created_at'>;
+        Update: Partial<ModerationActionRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -389,6 +447,10 @@ export type Database = {
       message_thread_kind: MessageThreadKindEnum;
       photo_album: PhotoAlbumEnum;
       photo_credit: PhotoCreditEnum;
+      platform_role: PlatformRoleEnum;
+      report_reason: ReportReasonEnum;
+      report_status: ReportStatusEnum;
+      moderation_action_kind: ModerationActionKindEnum;
     };
     CompositeTypes: Record<string, never>;
   };

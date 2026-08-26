@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
 
 import { AttributePanel } from '@/components/AttributePanel';
 import { PhotoTile, albumLabel } from '@/components/PhotoTile';
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
-import { requestPhotoRemoval } from '@/data/repository';
+import { requestPhotoRemoval, setConsumerAlert, setContributionFrozen } from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { exportVenueData } from '@/lib/export';
@@ -34,12 +34,15 @@ export default function VenueProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     now, isSaved, toggleSave, session, canBook, attemptContribution, startThread,
-    isFollowingVenue, toggleFollowVenue, addCheckIn, isManagingVenue,
+    isFollowingVenue, toggleFollowVenue, addCheckIn, isManagingVenue, isTrustSafety,
   } = useApp();
   const {
     venues, getVenue, venueReviews, filteredCount, eventsForVenue,
+    setVenueConsumerAlert, setVenueContributionFrozen,
   } = useCatalogue();
   const [album, setAlbum] = useState<Photo['album'] | 'all'>('all');
+  const [alertDraft, setAlertDraft] = useState<string | null>(null);
+  const [tsBusy, setTsBusy] = useState(false);
 
   const venue = getVenue(id);
 
@@ -221,6 +224,49 @@ export default function VenueProfile() {
     exportVenueData(venue, venueReviews(venue.id, true)).catch(() =>
       Alert.alert('Could not export', 'Something went wrong preparing the file.'),
     );
+
+  /**
+   * F-TRUST-04, trust_safety only. venues_guard_owner_write's second branch
+   * is what actually restricts this account to exactly these two columns
+   * (see the migration header on 20260826110000_add_trust_and_safety.sql)
+   * and writes the audit entry as a side effect — this just sends the write.
+   */
+  const applyAlert = async () => {
+    if (!venue) return;
+    setTsBusy(true);
+    const alert = (alertDraft ?? venue.consumerAlert ?? '').trim();
+    const result = await setConsumerAlert({ venueId: venue.id, alert: alert || null });
+    setTsBusy(false);
+    if (result.ok) {
+      setVenueConsumerAlert(venue.id, alert || undefined);
+      setAlertDraft(null);
+    } else {
+      Alert.alert('Could not update the alert', result.error);
+    }
+  };
+
+  const clearAlert = async () => {
+    if (!venue) return;
+    setTsBusy(true);
+    const result = await setConsumerAlert({ venueId: venue.id, alert: null });
+    setTsBusy(false);
+    if (result.ok) {
+      setVenueConsumerAlert(venue.id, undefined);
+      setAlertDraft(null);
+    } else {
+      Alert.alert('Could not clear the alert', result.error);
+    }
+  };
+
+  const toggleFreeze = async () => {
+    if (!venue) return;
+    setTsBusy(true);
+    const next = !venue.contributionFrozen;
+    const result = await setContributionFrozen({ venueId: venue.id, frozen: next });
+    setTsBusy(false);
+    if (result.ok) setVenueContributionFrozen(venue.id, next);
+    else Alert.alert('Could not update contribution state', result.error);
+  };
 
   const requestRemoval = (photo: Photo) =>
     requireAccount(() =>
@@ -868,6 +914,66 @@ export default function VenueProfile() {
           ) : null}
         </Card>
       </View>
+
+      {/* F-TRUST-04, trust_safety only. Nobody else on this screen ever sees
+          this card — isTrustSafety comes from a platform_roles row that has
+          no self-serve path at all (see the migration header on
+          20260826110000_add_trust_and_safety.sql). */}
+      {isTrustSafety ? (
+        <View style={gutter()}>
+          <SectionHeader title="Trust & Safety" />
+          <Card>
+            <Label>Consumer Alert</Label>
+            <TextInput
+              value={alertDraft ?? venue.consumerAlert ?? ''}
+              onChangeText={setAlertDraft}
+              placeholder="Reason shown to consumers on this listing"
+              placeholderTextColor={theme.textFaint}
+              accessibilityLabel="Consumer alert text"
+              multiline
+              style={[
+                font.body,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.cardMuted,
+                  borderRadius: radius.md,
+                  padding: space.md,
+                  minHeight: 60,
+                  textAlignVertical: 'top',
+                  marginTop: space.sm,
+                },
+              ]}
+            />
+            <View style={[ui.row, { gap: space.sm, marginTop: space.md }]}>
+              <Button label="Apply" loading={tsBusy} disabled={!(alertDraft ?? venue.consumerAlert)} onPress={applyAlert} />
+              {venue.consumerAlert ? (
+                <Button label="Clear" variant="ghost" loading={tsBusy} onPress={clearAlert} />
+              ) : null}
+            </View>
+            <Divider style={{ marginVertical: space.md }} />
+            <View style={[ui.row, { gap: space.md }]}>
+              <Ionicons
+                name={venue.contributionFrozen ? 'snow' : 'snow-outline'}
+                size={18}
+                color={venue.contributionFrozen ? theme.closed : theme.textFaint}
+              />
+              <Text style={[font.body, { color: theme.text, flex: 1 }]}>
+                {venue.contributionFrozen ? 'New reviews are frozen' : 'Contribution is open'}
+              </Text>
+              <Button
+                label={venue.contributionFrozen ? 'Unfreeze' : 'Freeze'}
+                variant="secondary"
+                loading={tsBusy}
+                onPress={toggleFreeze}
+              />
+            </View>
+            <Body dim style={{ marginTop: space.md }}>
+              Freezing blocks new reviews at this listing (R12: "freeze contribution on a
+              listing"). It does not touch reviews already published.
+            </Body>
+          </Card>
+        </View>
+      ) : null}
 
       {/* F-MSG: message the venue directly, or send a structured private-event
           request. R3 (verified) is required, same as booking. */}

@@ -27,7 +27,7 @@ export default function ProfileScreen() {
   const {
     session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
-    followedMemberIds, followedVenueIds, checkIns, addManagedVenue,
+    followedMemberIds, followedVenueIds, checkIns, addManagedVenue, isModerator, isTrustSafety,
   } = useApp();
   const { reviews, venueById, source } = useCatalogue();
 
@@ -157,6 +157,24 @@ export default function ProfileScreen() {
                 </View>
               );
             })}
+          </Card>
+        </View>
+      ) : null}
+
+      {/* F-TRUST: a moderator or trust_safety account gets a way into the
+          queue. Nobody else ever sees this — there is no self-serve path to
+          either role (see 20260826110000_add_trust_and_safety.sql). */}
+      {isModerator || isTrustSafety ? (
+        <View style={gutter()}>
+          <Card onPress={() => router.push('/moderation')}>
+            <View style={[ui.row, { gap: space.md }]}>
+              <IconBadge icon="shield-checkmark" size={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={[font.cardTitle, { color: theme.text }]}>Moderation queue</Text>
+                <Body dim>{isTrustSafety ? 'Trust & Safety' : 'Moderator'} access</Body>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
+            </View>
           </Card>
         </View>
       ) : null}

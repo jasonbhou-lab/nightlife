@@ -39,6 +39,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
 | Business portal | F-BIZ-01, 03, 04, 05, 07, 09, 13, 15 (each scoped down — see below) |
+| Trust & Safety | F-TRUST-01, 04, 06, 08 (scoped — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
 ### The parts that carry the most weight
@@ -261,6 +262,31 @@ account's insert attempt hard-failed, and an anonymous read saw the same row —
 back transaction, the same technique that had already caught two real bugs in earlier F-BIZ
 migrations.
 
+**Moderation queue and Trust & Safety tools** (`app/moderation/index.tsx`, `app/venue/[id].tsx`'s
+Trust & Safety card, F-TRUST, scoped). Before this, "Report this review" was a local
+`Alert.alert` with five reasons and no submission anywhere — this build's one genuine,
+previously-undiscovered gap of the same shape as the age-gate bug: a real-looking control with
+nothing behind it. It is real now: a `content_reports` row, a queue, and two roles with
+different power, matching R11/R12 from PRD Section 2.3 — a moderator can dismiss, remove, or
+escalate a report; only a trust_safety account can resolve what gets escalated, restore a
+review it removed, apply or clear a Consumer Alert (`venues.consumer_alert`, present in the
+schema since the very first migration but never written until now), or freeze new reviews at a
+listing. There is no self-serve way to acquire either role — unlike a business claim, "I work
+in Trust & Safety" isn't a claim a client should ever get to assert, so a `platform_roles` row
+is granted directly in the database, the same honest gap as `elite`/`trust` on profiles having
+no client-side path to earn them. Every removal, restoration, and Consumer Alert change writes
+an entry to `moderation_actions`, a table with no update, delete, *or insert* policy for any
+client role at all — every row is written by a `SECURITY DEFINER` trigger reacting to an
+already-RLS-gated client action, which is the actual meaning of "immutable" here rather than
+a naming convention. Left out on purpose: automated pre-screening and coordinated-behavior
+detection (F-TRUST-02/05, need real ML/heuristics this build doesn't have, the same reason
+F-MEDIA-02/03 and F-BIZ-08 are out), an appeal flow reviewed by a second, distinct person
+(F-TRUST-03, needs a case-assignment model this build doesn't have), transparency reporting
+(F-TRUST-07, priority C, needs aggregate reporting), and photos/Q&A in the queue (reviews are
+the only content type with a real report entry point in this client). Every moderation action
+resolves a specific report on file — there is no "just remove this" door for a moderator
+patrolling without one.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -285,13 +311,13 @@ migrations.
   not a cosmetic simplification — treat it as something to revisit with counsel before any of this
   became a real product, per the PRD's own framing of age standards as an open legal question
   (Section 9, Open Question 3) rather than a product team's default to set.
-- **Business portal, moderation console, internal tooling** (F-BIZ, F-TRUST, F-ADMIN). Out of
-  scope for a consumer client; the PRD makes web the primary surface for these. Their consumer-
-  visible *outputs* are implemented: Consumer Alert banners, owner-answer badges, paid-placement
-  labels, claimed/unclaimed states, closure and successor handling. Eight exceptions are real,
-  scoped-down business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim
-  step (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about
-  editor (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
+- **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
+  the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
+  implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
+  claimed/unclaimed states, closure and successor handling. Eight exceptions are real, scoped-down
+  business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
+  (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about editor
+  (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-07's review response composer (no sentiment summary,
   keyword themes, or alerting), F-BIZ-09's offers (self-published only — no budget, targeting, or
@@ -299,7 +325,10 @@ migrations.
   (manager/staff only, no access audit log), and F-BIZ-15's own-data export (reviews and media, not
   analytics — there is none to export — and not the team roster). Everything else — the typed
   attributes themselves, media management, analytics, advertising, and the rest of F-BIZ-02
-  through 15 — has no dashboard here at all.
+  through 15 — has no dashboard here at all. F-TRUST is a partial exception of its own now — see
+  *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer
+  Alert/contribution-freeze controls, not the full moderation console (no automated pre-screening,
+  coordinated-behavior detection, appeal flow, or transparency reporting).
 - **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
   configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery
