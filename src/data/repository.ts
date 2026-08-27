@@ -1,7 +1,17 @@
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+
 import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
+
+/**
+ * Required once at module scope so a web OAuth popup/tab closes itself after
+ * the redirect lands — a no-op on native. See signInWithGoogle below.
+ */
+WebBrowser.maybeCompleteAuthSession();
 import type {
   BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow, EventRow,
   MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
@@ -1348,6 +1358,70 @@ export async function verifySignInCode(input: {
     .from('profiles')
     .select('display_name, phone_verified, age_verified')
     .eq('id', data.user.id)
+    .maybeSingle();
+  return { ok: true, profile: toAuthProfile(row) };
+}
+
+/**
+ * Google sign-in, for both new and returning accounts alike — there is no
+ * separate "sign up" here, the same way the email code above never has one:
+ * the first successful Google sign-in *is* the account creation, exactly
+ * like the first-ever code verification for an email is.
+ *
+ * Supabase Auth's OAuth flow is browser-based even from a native app: it
+ * hands back a URL to `https://<project>.supabase.co/auth/v1/authorize`,
+ * this app opens that in `expo-web-browser`'s `openAuthSessionAsync` (which
+ * on iOS/Android is a real system-managed auth session, not just an
+ * in-app webview), and Google's own consent screen and the OAuth client's
+ * secret never pass through this app at all — both stay on Supabase's side.
+ * `redirectTo` is a deep link back into this app; Supabase appends the
+ * session as URL parameters when it sends the browser there, and
+ * `expo-auth-session`'s `QueryParams` helper is what actually parses those
+ * back out, since they can land in the URL fragment rather than the query
+ * string and a plain `URL` parser here would miss that half.
+ *
+ * There is no PKCE code exchange and no global deep-link listener for a
+ * cold-start return — this app's own client uses the implicit flow already
+ * (see src/lib/supabase.ts), and `openAuthSessionAsync` already resolves
+ * with the redirect URL itself once the browser session completes, so
+ * nothing else needs to be watching for it. On web, this needs `expo start
+ * --web --https` in development — the redirect's crypto-state check requires
+ * the same origin the flow started from, which a plain `http://localhost`
+ * dev server cannot satisfy; native and standalone/dev-client builds are not
+ * affected.
+ */
+export async function signInWithGoogle(): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is nowhere to sign in to.' };
+
+  const redirectTo = Linking.createURL('auth/callback');
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: true },
+  });
+  if (error) return { ok: false, error: error.message };
+  if (!data.url) return { ok: false, error: 'Could not start Google sign-in.' };
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success') {
+    return {
+      ok: false,
+      error: result.type === 'cancel' ? 'Google sign-in was cancelled.' : 'Could not complete Google sign-in.',
+    };
+  }
+
+  const { params, errorCode } = QueryParams.getQueryParams(result.url);
+  if (errorCode) return { ok: false, error: errorCode };
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) return { ok: false, error: 'Google did not return a session.' };
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (sessionError) return { ok: false, error: sessionError.message };
+  if (!sessionData.user) return { ok: false, error: 'Could not confirm the Google account.' };
+
+  const { data: row } = await supabase
+    .from('profiles')
+    .select('display_name, phone_verified, age_verified')
+    .eq('id', sessionData.user.id)
     .maybeSingle();
   return { ok: true, profile: toAuthProfile(row) };
 }

@@ -188,6 +188,31 @@ and message threads stay exactly as blocked as before, since their RLS policies 
 `private.is_verified()` and nothing here can make that true. With no backend configured, sign-in
 falls back to the original local-only mock unchanged, so the app keeps working offline.
 
+**Google sign-in** (`app/auth.tsx`, `src/data/repository.ts`'s `signInWithGoogle`). A second real path
+onto the same account model as the one-time code above — there is no separate sign-up screen for
+either, on purpose: the first successful sign-in for a given identity, email or Google, *is* the
+account creation. Supabase Auth's OAuth flow is browser-based even from a native app: this app opens
+Supabase's `/authorize` URL in `expo-web-browser`'s `openAuthSessionAsync` (a real system-managed
+auth session on iOS/Android, not an in-app webview) and parses the session back out of the resulting
+redirect with `expo-auth-session`'s `QueryParams` helper — Google's own consent screen, and the OAuth
+client secret, never pass through this app at all, both stay on Supabase's side. `handle_new_user()`
+was extended to read `full_name`/`name` out of Google's own profile data when `display_name` isn't
+set (only the email-code path ever sets that key), so a first-time Google sign-in gets a real name
+instead of the literal fallback "Guest" — see the migration header on
+`20260827140000_add_google_oauth_display_name.sql`.
+This needs configuration this repository cannot do on its own: a Google Cloud OAuth 2.0 Client
+(type "Web application", authorized redirect URI `https://wfrgebdwbddhitjvqrhl.supabase.co/auth/v1/callback`),
+its Client ID and Secret entered directly into the Supabase Dashboard under Authentication → Providers
+→ Google (never through this app or this chat — the secret has to stay off the client and out of
+version control), and this app's own redirect (`nightout://**`, or the exact `exp://` URL the dev
+server prints, for Expo Go) added to Authentication → URL Configuration → Redirect URLs. Until that's
+done, the button is fully wired and fails the same honest, visible way every other not-yet-configured
+path in this app does — `signInWithOAuth` returns Supabase's own "provider not enabled" error, shown
+in the same callout the email-code path already uses, not a silent no-op. On web specifically, local
+development needs `expo start --web --https`; the redirect's crypto-state check requires the same
+origin the flow started from, which plain `http://localhost` cannot satisfy — native and
+standalone/dev-client builds are unaffected.
+
 **Review response composer** (`app/reviews/[id].tsx`, F-BIZ-07, scoped). The full requirement also
 asks for a sentiment summary, keyword themes, and alerting on new reviews below a threshold — those
 need real analytics or ML this build does not have, the same reason F-MEDIA-02/03's automated

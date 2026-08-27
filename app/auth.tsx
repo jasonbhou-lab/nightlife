@@ -17,25 +17,44 @@ import { font, radius, space } from '@/theme';
  * attempt, never from a splash screen.
  *
  * With a backend configured, this is real Supabase Auth — a one-time code
- * emailed to you, no password field, ever. Without one, there is nowhere to
- * send a code, so sign-in falls back to a local, unpersisted-past-this-
- * device identity, exactly as this screen always worked before real auth
- * existed. Either way, phone and age verification (the second step) stays
- * self-attested — there is no real SMS provider wired up here.
+ * emailed to you, no password field, ever, or Google sign-in as a second
+ * real path onto the same account model. There is no separate sign-up
+ * screen for either: the first successful code verification or Google
+ * sign-in for a given identity *is* the account creation, same as it always
+ * was for email. Without a backend, there is nowhere to send a code and no
+ * OAuth provider to call, so sign-in falls back to a local,
+ * unpersisted-past-this-device identity, exactly as this screen always
+ * worked before real auth existed — the Google button is hidden entirely
+ * rather than shown broken. Either way, phone and age verification (the
+ * second step) stays self-attested — there is no real SMS provider wired up
+ * here.
  */
 export default function AuthScreen() {
   const theme = useTheme();
   const router = useRouter();
   const {
-    signIn, sendSignInCode, verifySignInCode, verifyAge, session,
+    signIn, sendSignInCode, verifySignInCode, signInWithGoogle, verifyAge, session,
   } = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'identify' | 'code' | 'verify'>('identify');
+
+  const continueWithGoogle = async () => {
+    setGoogleBusy(true);
+    setError(null);
+    const result = await signInWithGoogle();
+    setGoogleBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setStep('verify');
+  };
 
   const submitIdentify = async () => {
     if (!hasBackend) {
@@ -161,7 +180,7 @@ export default function AuthScreen() {
             ) : null}
 
             {error ? (
-              <Callout tone="danger" icon="alert-circle" title="Could not send a code">
+              <Callout tone="danger" icon="alert-circle" title="Could not continue">
                 <Body dim>{error}</Body>
               </Callout>
             ) : null}
@@ -174,6 +193,25 @@ export default function AuthScreen() {
               disabled={!name.trim() || (hasBackend && !email.trim())}
               onPress={submitIdentify}
             />
+
+            {hasBackend ? (
+              <>
+                <View style={[{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.lg }]}>
+                  <Divider style={{ flex: 1 }} />
+                  <Text style={[font.small, { color: theme.textFaint }]}>or</Text>
+                  <Divider style={{ flex: 1 }} />
+                </View>
+                <Button
+                  label="Continue with Google"
+                  variant="secondary"
+                  icon="logo-google"
+                  full
+                  loading={googleBusy}
+                  style={{ marginTop: space.md }}
+                  onPress={continueWithGoogle}
+                />
+              </>
+            ) : null}
           </Card>
 
           <Card>

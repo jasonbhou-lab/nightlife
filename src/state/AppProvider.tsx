@@ -7,8 +7,8 @@ import { useColorScheme } from 'react-native';
 import {
   cancelBookingRemote, createMessageThread, getAuthSnapshot, getManagedVenueIds,
   getPlatformRoles, getThreadMessages, onAuthSignedOut, sendMessage as sendMessageRemote,
-  sendSignInCode as sendSignInCodeRemote, signOutRemote,
-  verifySignInCode as verifySignInCodeRemote, type AuthProfile,
+  sendSignInCode as sendSignInCodeRemote, signInWithGoogle as signInWithGoogleRemote,
+  signOutRemote, verifySignInCode as verifySignInCodeRemote, type AuthProfile,
 } from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
 import { hasBackend } from '@/lib/supabase';
@@ -96,6 +96,13 @@ type Ctx = {
    */
   sendSignInCode: (email: string, displayName: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   verifySignInCode: (email: string, code: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Google sign-in — a second real path onto the same account model, not a
+   * separate flow. There is no "sign up with Google" distinct from "sign in
+   * with Google": the first successful call for a given Google account is
+   * what creates it, same as the email code's first-ever verification does.
+   */
+  signInWithGoogle: () => Promise<{ ok: true } | { ok: false; error: string }>;
   verifyAge: () => void;
   /** Returns 'ok' | 'soft_wall' | 'hard_wall'. */
   attemptContribution: () => 'ok' | 'soft_wall';
@@ -395,6 +402,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [applyAuthProfile],
   );
+
+  const signInWithGoogle = useCallback(async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const result = await signInWithGoogleRemote();
+    if (!result.ok) return result;
+    applyAuthProfile(result.profile);
+    getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
+    getPlatformRoles().then(setPlatformRoles).catch(() => {});
+    return { ok: true };
+  }, [applyAuthProfile]);
 
   const signOut = useCallback(() => {
     setSession(defaultSession);
@@ -781,6 +797,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       sendSignInCode,
       verifySignInCode,
+      signInWithGoogle,
       verifyAge,
       attemptContribution,
       canBook: session.role === 'verified' || session.role === 'elite',
@@ -830,7 +847,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
-      verifySignInCode, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
+      verifySignInCode, signInWithGoogle, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
       addManagedVenue, platformRoles, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
