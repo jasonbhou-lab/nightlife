@@ -38,12 +38,26 @@ export function VenueCard({
   const chips = decisionChips(venue, now, compact ? 2 : 3);
   const saved = isSaved(venue.id);
 
+  /**
+   * The bookmark button used to sit inside `Card`'s own onPress Pressable,
+   * and on web both render as a real HTML `<button>` (react-native-web maps
+   * `accessibilityRole="button"` straight to the `<button>` tag for both
+   * native and web accessibility, not just a `<div role="button">`) — a
+   * `<button>` nested inside another `<button>` is invalid HTML, which is
+   * exactly what every "cannot contain a nested <button>" warning in this
+   * app's browser console has been. Card itself stays a plain, non-pressable
+   * wrapper here; the navigable content and the bookmark toggle are now two
+   * sibling buttons instead of one nested inside the other, so both keep a
+   * real accessibility role on every platform without ever nesting.
+   */
   return (
-    <Card
-      onPress={onPress ?? (() => router.push(`/venue/${venue.id}`))}
-      accessibilityLabel={`${venue.name}, ${venue.primary.category}, rated ${venue.rating} from ${venue.reviewCount} reviews, ${state.label}`}
-      style={{ marginBottom: space.md }}
-    >
+    <Card padded={false} style={{ marginBottom: space.md }}>
+      <Pressable
+        onPress={onPress ?? (() => router.push(`/venue/${venue.id}`))}
+        accessibilityRole="button"
+        accessibilityLabel={`${venue.name}, ${venue.primary.category}, rated ${venue.rating} from ${venue.reviewCount} reviews, ${state.label}`}
+        style={({ pressed }) => [{ padding: space.lg }, pressed && { opacity: 0.9 }]}
+      >
       {venue.promoted ? (
         <View style={{ marginBottom: space.sm }}>
           <AdLabel />
@@ -130,6 +144,7 @@ export function VenueCard({
           </Text>
         </View>
       ) : null}
+      </Pressable>
 
       {rightSlot ?? (
         <Pressable
