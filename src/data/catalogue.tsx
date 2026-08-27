@@ -69,6 +69,11 @@ type CatalogueCtx = {
    */
   setVenueListing: (venueId: string, tagline: string, about: string) => void;
   /**
+   * F-BIZ-07: reflect a just-saved review alert threshold in this session
+   * without waiting on a full `reload()`. See repository.setVenueReviewAlertThreshold.
+   */
+  setVenueReviewAlertThreshold: (venueId: string, threshold: number | undefined) => void;
+  /**
    * F-BIZ-09: reflect a just-posted offer, or its removal, in this session
    * without waiting on a full `reload()`. See repository.createVenueOffer /
    * deleteVenueOffer.
@@ -163,6 +168,10 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
 
   const setVenueListing = useCallback((venueId: string, tagline: string, about: string) => {
     setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, tagline, about } : v)));
+  }, []);
+
+  const setVenueReviewAlertThreshold = useCallback((venueId: string, threshold: number | undefined) => {
+    setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, reviewAlertThreshold: threshold } : v)));
   }, []);
 
   const addVenueOffer = useCallback((venueId: string, offer: VenueOffer) => {
@@ -270,6 +279,7 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setVenueHours,
       setVenueMenus,
       setVenueListing,
+      setVenueReviewAlertThreshold,
       addVenueOffer,
       removeVenueOffer,
       setReviewRecommended,
@@ -281,8 +291,9 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
-      setVenueMenus, setVenueListing, addVenueOffer, removeVenueOffer, setReviewRecommended,
-      setVenueConsumerAlert, setVenueContributionFrozen, setVenuePhotoCover, setVenuePhotoOrder,
+      setVenueMenus, setVenueListing, setVenueReviewAlertThreshold, addVenueOffer, removeVenueOffer,
+      setReviewRecommended, setVenueConsumerAlert, setVenueContributionFrozen, setVenuePhotoCover,
+      setVenuePhotoOrder,
     ],
   );
 

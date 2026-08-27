@@ -87,6 +87,8 @@ export type VenueRow = {
   avg_response_minutes: number | null;
   /** F-MSG-02: sent automatically on the first message in a new thread, if set. */
   auto_response_text: string | null;
+  /** F-BIZ-07: a review at or below this rating with no owner_response yet counts as needing attention. Null disables it. */
+  review_alert_threshold: number | null;
   /** F-PROFILE-11 / F-TRUST-04, both writable only by trust_safety. */
   contribution_frozen: boolean;
   search_text: string | null;

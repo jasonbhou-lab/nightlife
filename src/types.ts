@@ -354,6 +354,8 @@ export type Venue = {
   avgResponseMinutes?: number;
   /** F-MSG-02: sent automatically on the first message in a new thread, if set. */
   autoResponseText?: string;
+  /** F-BIZ-07: a review at or below this rating with no owner response counts as needing attention. */
+  reviewAlertThreshold?: number;
 };
 
 /* --------------------------------------------------------------- messaging */

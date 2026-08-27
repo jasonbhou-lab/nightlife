@@ -71,6 +71,11 @@ export default function VenueProfile() {
   const events = eventsForVenue(venue.id);
   const recommended = venueReviews(venue.id);
   const hidden = filteredCount(venue.id);
+  const reviewsNeedingResponse = venue.reviewAlertThreshold == null
+    ? 0
+    : venueReviews(venue.id, true).filter(
+      (r) => r.rating <= venue.reviewAlertThreshold! && !r.ownerResponse,
+    ).length;
   const dims = subRatingDimensions[venue.primary.vertical];
   const successor = venue.closure?.successorId ? getVenue(venue.closure.successorId) : undefined;
 
@@ -928,6 +933,36 @@ export default function VenueProfile() {
               >
                 <Ionicons name="chatbubbles" size={18} color={theme.accent} />
                 <Text style={[font.body, { color: theme.text, flex: 1 }]}>Manage messages</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+              </Pressable>
+              <Divider />
+              <Pressable
+                onPress={() => router.push(`/venue/reviews?venueId=${venue.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  reviewsNeedingResponse
+                    ? `Manage reviews, ${reviewsNeedingResponse} needing a response`
+                    : 'Manage reviews'
+                }
+                style={[ui.row, { gap: space.md, minHeight: 44 }]}
+              >
+                <Ionicons name="star-half" size={18} color={theme.accent} />
+                <Text style={[font.body, { color: theme.text, flex: 1 }]}>Manage reviews</Text>
+                {reviewsNeedingResponse ? (
+                  <View
+                    style={{
+                      minWidth: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      paddingHorizontal: 6,
+                      backgroundColor: theme.closed,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={[font.micro, { color: theme.onGround }]}>{reviewsNeedingResponse}</Text>
+                  </View>
+                ) : null}
                 <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
               </Pressable>
               <Divider />

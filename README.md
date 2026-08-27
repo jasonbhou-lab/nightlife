@@ -200,6 +200,17 @@ query, not a guess), and the database — not the client — rejects an update f
 touches anything on the review besides the response, so this can never become a backdoor to edit
 someone else's review.
 
+**Review alerting** (`app/venue/reviews.tsx`, F-BIZ-07's remaining half). Sentiment summary and
+keyword themes stay out of scope for the reason above, but alerting on a low-rated review doesn't
+actually need that infrastructure — it only needs a threshold and the same `rating`/`owner_response`
+columns the composer already reads. A business account sets a star threshold on its own venue
+(`venues.review_alert_threshold`, written through the same guard trigger as the auto-response and
+hours, one more column in its allowlist); a review at or below it with no `owner_response` yet
+surfaces here, with a count badge on the venue page's "Manage reviews" row. There is no push
+notification behind this — nothing in this build has one (see F-MSG-01/02) — so "alerting" means
+what it already means for the moderation queue and the bookings console: a number in the business
+portal, not an out-of-band ping.
+
 **Hours and happy hour editor** (`app/hours/edit.tsx`, F-BIZ-04, scoped). Dropped from the full
 requirement: bulk/multi-location editing (F-BIZ-14 is out of scope, so there's nowhere to
 bulk-apply to) and temporary closure scheduling (`closure_state`/`closure_note` are Trust &
@@ -381,8 +392,9 @@ Postgres happened to return, not a real sort.
   (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-06's cover photo and reorder (owner-credited photos only,
-  same as F-MEDIA-06 draws it), F-BIZ-07's review response composer (no sentiment summary,
-  keyword themes, or alerting), F-BIZ-09's offers (self-published only — no budget, targeting, or
+  same as F-MEDIA-06 draws it), F-BIZ-07's review response composer and threshold-based alerting (no
+  sentiment summary or keyword themes, and no push notification behind the alert — see F-MSG-01/02),
+  F-BIZ-09's offers (self-published only — no budget, targeting, or
   ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-11's reservation and waitlist
   console (no floor map, real-time table-tier status, or staff assignment), F-BIZ-13's
   invite-a-manager flow (manager/staff only, no access audit log), and F-BIZ-15's own-data export
@@ -478,6 +490,9 @@ presentation only. So:
   from the client, and a daily upload cap (8 photos, 40 for Elite) is enforced the same way
   (F-MEDIA-01). An upload's storage path is checked against real venue ids before it's accepted,
   not just organized by convention.
+- A business account can set `review_alert_threshold` on its own venue and nothing else through
+  that write — the check constraint also rejects a value outside 1–5 at the row level, not just in
+  the chip picker the client happens to offer (F-BIZ-07).
 
 One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
 enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus

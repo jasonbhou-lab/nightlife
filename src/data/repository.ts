@@ -114,6 +114,7 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
     bookingTerms: row.booking_terms ?? undefined,
     avgResponseMinutes: row.avg_response_minutes ?? undefined,
     autoResponseText: row.auto_response_text ?? undefined,
+    reviewAlertThreshold: row.review_alert_threshold ?? undefined,
     busyness: Object.fromEntries(
       Object.entries(asRecord(row.busyness)).map(([k, v]) => [Number(k), Number(v)]),
     ),
@@ -1224,6 +1225,26 @@ export async function setVenueAutoResponse(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
   const { error } = await supabase.from('venues').update({ auto_response_text: input.text }).eq('id', input.venueId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-BIZ-07: the threshold a business account sets for which reviews should
+ * surface as needing attention. Null disables it. See the migration header
+ * on 20260827120000_add_review_alerts.sql for why this doesn't need the
+ * sentiment/keyword-theme infrastructure the rest of the PRD requirement
+ * asks for.
+ */
+export async function setVenueReviewAlertThreshold(input: {
+  venueId: string;
+  threshold: number | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
+  const { error } = await supabase
+    .from('venues')
+    .update({ review_alert_threshold: input.threshold })
+    .eq('id', input.venueId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
