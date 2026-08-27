@@ -88,6 +88,14 @@ type CatalogueCtx = {
    */
   setVenueConsumerAlert: (venueId: string, alert: string | undefined) => void;
   setVenueContributionFrozen: (venueId: string, frozen: boolean) => void;
+  /**
+   * F-BIZ-06 / F-MEDIA-06: reflect a just-selected cover, or a just-saved
+   * reorder of the venue's own owner-credited photos, in this session
+   * without waiting on a full `reload()`. See repository.setPhotoCover /
+   * reorderOwnerPhotos.
+   */
+  setVenuePhotoCover: (venueId: string, photoId: string) => void;
+  setVenuePhotoOrder: (venueId: string, orderedOwnerPhotoIds: string[]) => void;
 };
 
 const Ctx = createContext<CatalogueCtx | null>(null);
@@ -185,6 +193,41 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const setVenuePhotoCover = useCallback((venueId: string, photoId: string) => {
+    setVenues((prev) =>
+      prev.map((v) => {
+        if (v.id !== venueId) return v;
+        const target = v.photos.find((p) => p.id === photoId);
+        if (!target) return v;
+        const rest = v.photos
+          .filter((p) => p.id !== photoId)
+          .map((p) => (p.isCover ? { ...p, isCover: undefined } : p));
+        return { ...v, photos: [{ ...target, isCover: true }, ...rest] };
+      }),
+    );
+  }, []);
+
+  const setVenuePhotoOrder = useCallback((venueId: string, orderedOwnerPhotoIds: string[]) => {
+    setVenues((prev) =>
+      prev.map((v) => {
+        if (v.id !== venueId) return v;
+        const byId = new Map(v.photos.map((p) => [p.id, p]));
+        const orderedSet = new Set(orderedOwnerPhotoIds);
+        let cursor = 0;
+        // Reassigns which photo occupies each slot an owner photo already
+        // held, rather than rebuilding the array — seed and community
+        // photos keep their exact positions.
+        const photos = v.photos.map((p) => {
+          if (!orderedSet.has(p.id)) return p;
+          const replacement = byId.get(orderedOwnerPhotoIds[cursor]);
+          cursor += 1;
+          return replacement ?? p;
+        });
+        return { ...v, photos };
+      }),
+    );
+  }, []);
+
   const venueById = useMemo(
     () => Object.fromEntries(venues.map((v) => [v.id, v])),
     [venues],
@@ -232,12 +275,14 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setReviewRecommended,
       setVenueConsumerAlert,
       setVenueContributionFrozen,
+      setVenuePhotoCover,
+      setVenuePhotoOrder,
     }),
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
       setVenueMenus, setVenueListing, addVenueOffer, removeVenueOffer, setReviewRecommended,
-      setVenueConsumerAlert, setVenueContributionFrozen,
+      setVenueConsumerAlert, setVenueContributionFrozen, setVenuePhotoCover, setVenuePhotoOrder,
     ],
   );
 

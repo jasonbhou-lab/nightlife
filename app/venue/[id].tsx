@@ -648,6 +648,15 @@ export default function VenueProfile() {
         <Text style={[font.small, { color: theme.onGroundFaint, marginTop: space.sm }]}>
           Location and device metadata are stripped on upload. Every image carries alternative text.
         </Text>
+        {isManagingVenue(venue.id) ? (
+          <Button
+            label="Manage cover photo and order"
+            variant="onGround"
+            icon="images-outline"
+            style={{ marginTop: space.md, alignSelf: 'flex-start' }}
+            onPress={() => router.push(`/venue/photos?venueId=${venue.id}`)}
+          />
+        ) : null}
       </View>
 
       {/* Menus, tap lists, bottle lists, humidor highlights. */}

@@ -103,8 +103,15 @@ export type Photo = {
   id: string;
   album: 'food' | 'drink' | 'interior' | 'exterior' | 'menu' | 'crowd' | 'humidor' | 'stage' | 'table';
   caption: string;
-  /** Owner media can be reordered by the owner; community media cannot (F-MEDIA-06). */
+  /**
+   * Owner media can be reordered by the owner, and one owner photo can be
+   * selected as the cover; community media cannot be touched either way
+   * (F-BIZ-06 / F-MEDIA-06). Only ever true on an owner-credited real
+   * upload — never on a seeded placeholder, which has no row behind it to
+   * select in the first place.
+   */
   by: 'owner' | 'community';
+  isCover?: boolean;
   /** Auto-generated for community photos, owner-editable for owner photos (5.4). */
   alt: string;
   /**

@@ -264,6 +264,7 @@ function mapPhotoRow(row: PhotoRow, publicUrl: string): Photo {
     album: row.album,
     caption: row.caption ?? '',
     by: row.by,
+    isCover: row.is_cover || undefined,
     alt: row.alt ?? 'Community-uploaded photo',
     uri: publicUrl,
     removalRequested: row.removal_requested || undefined,
@@ -327,7 +328,12 @@ export async function loadCatalogue(
       supabase.from('table_tiers').select('*'),
       supabase.from('events').select('*'),
       supabase.from('reviews').select('*'),
-      supabase.from('photos').select('*'),
+      supabase
+        .from('photos')
+        .select('*')
+        .order('is_cover', { ascending: false })
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true }),
       supabase.from('venue_offers').select('*'),
     ]);
 
@@ -371,9 +377,15 @@ export async function loadCatalogue(
       list.push(mapPhotoRow(row, pub.publicUrl));
       photosByVenue.set(row.venue_id, list);
     }
+    // A selected cover (F-BIZ-06) leads the whole gallery, not just the
+    // uploaded segment, or choosing one would have no visible effect next
+    // to the seeded placeholder photos already at the front of the array.
     const withUploadedPhotos = withFallbackDistance.map((v) => {
       const uploaded = photosByVenue.get(v.id);
-      return uploaded?.length ? { ...v, photos: [...v.photos, ...uploaded] } : v;
+      if (!uploaded?.length) return v;
+      const cover = uploaded.find((p) => p.isCover);
+      const rest = cover ? uploaded.filter((p) => p.id !== cover.id) : uploaded;
+      return { ...v, photos: cover ? [cover, ...v.photos, ...rest] : [...v.photos, ...rest] };
     });
 
     const offersByVenue = new Map<string, VenueOffer[]>();
@@ -669,6 +681,38 @@ export async function requestPhotoRemoval(input: {
     .from('photo_removal_requests')
     .insert({ photo_id: input.photoId, requested_by: user.id, reason: input.reason });
   if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-BIZ-06 / F-MEDIA-06: select a cover photo among a venue's own
+ * owner-credited uploads. The database — not this function — is what
+ * actually restricts this to `by = 'owner'` rows at a venue the caller
+ * manages (photos_business_update in 20260827110000_add_photo_management.sql),
+ * and clears any previous cover at the same venue as a side effect.
+ */
+export async function setPhotoCover(photoId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
+  const { error } = await supabase.from('photos').update({ is_cover: true }).eq('id', photoId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-BIZ-06 / F-MEDIA-06: persist a new relative order for a venue's own
+ * owner-credited photos — `orderedPhotoIds` is the full list, front to back,
+ * and each photo's `sort_order` becomes its index. Small, bounded list
+ * (owner uploads only, capped by the daily upload limit), so one update per
+ * photo rather than a bulk statement.
+ */
+export async function reorderOwnerPhotos(orderedPhotoIds: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
+  const client = supabase;
+  const results = await Promise.all(
+    orderedPhotoIds.map((id, index) => client.from('photos').update({ sort_order: index }).eq('id', id)),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
   return { ok: true };
 }
 

@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 02 (scoped), 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 03, 04, 05, 07, 09, 11, 13, 15 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 03, 04, 05, 06, 07, 09, 11, 13, 15 (each scoped down — see below) |
 | Trust & Safety | F-TRUST-01, 04, 06, 08 (scoped — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
@@ -334,6 +334,20 @@ own booking would have left a permanently-stale row for the venue to see. Both a
 way messaging already handles this — local state updates immediately, the remote write mirrors it
 best-effort afterward.
 
+**Cover photo and reorder** (`app/venue/photos.tsx`, F-BIZ-06 / F-MEDIA-06, scoped). A business
+account can select one of its own venue's owner-credited photos as the cover and reorder its own
+uploads — the `Photo` type has carried a comment anticipating exactly this since the original
+photos migration ("Owner media can be reordered by the owner; community media cannot"), but
+nothing implemented it until now: the original migration's own header said "once posted, a photo
+is immutable from the client," no update policy at all. Cover selection is scoped to
+owner-credited photos too, not any public-read photo a business might like — the PRD draws the
+reorder line at community media, and this build draws cover selection the same line, so community
+photos stay genuinely untouchable by a business account either way. At most one cover per venue,
+enforced by a trigger that clears any previous cover automatically rather than trusting the client
+to unset it. Building this also fixed a real, separate bug it exposed: the photo fetch in
+`repository.ts` had no `.order()` clause at all, so gallery order was undefined — whatever
+Postgres happened to return, not a real sort.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -361,19 +375,20 @@ best-effort afterward.
 - **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
   the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
-  claimed/unclaimed states, closure and successor handling. Nine exceptions are real, scoped-down
+  claimed/unclaimed states, closure and successor handling. Ten exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
   (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about editor
   (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
-  editor (no CSV/PDF/photo import), F-BIZ-07's review response composer (no sentiment summary,
+  editor (no CSV/PDF/photo import), F-BIZ-06's cover photo and reorder (owner-credited photos only,
+  same as F-MEDIA-06 draws it), F-BIZ-07's review response composer (no sentiment summary,
   keyword themes, or alerting), F-BIZ-09's offers (self-published only — no budget, targeting, or
   ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-11's reservation and waitlist
   console (no floor map, real-time table-tier status, or staff assignment), F-BIZ-13's
   invite-a-manager flow (manager/staff only, no access audit log), and F-BIZ-15's own-data export
   (reviews and media, not analytics — there is none to export — and not the team roster).
-  Everything else — the typed attributes themselves, media management, analytics, advertising, and
-  the rest of F-BIZ-02 through 15 — has no dashboard here at all. F-TRUST is a partial exception of
+  Everything else — the typed attributes themselves beyond a cover flag, analytics, advertising,
+  and the rest of F-BIZ-02 through 15 — has no dashboard here at all. F-TRUST is a partial exception of
   its own now — see
   *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer
   Alert/contribution-freeze controls, not the full moderation console (no automated pre-screening,
@@ -453,6 +468,9 @@ presentation only. So:
 - A `messages` row can only ever carry `sender = 'user'` from the account that owns the thread, or
   `sender = 'business'` from an account holding a business role at the thread's venue — never the
   other way around, and never both at once from the same account (F-MSG-02).
+- A business account can set `sort_order`/`is_cover` on its own venue's owner-credited photos and
+  nothing else — not caption, album, or any community photo, regardless of how convincing the shot
+  is (F-BIZ-06).
 - A message thread's `sender` column is constrained to `'user'` at the schema level, and a rate
   limit (5 seconds per thread, 40 per account per hour) is enforced by trigger, not just by the
   composer disabling Send (F-MSG-04, NFR-11).

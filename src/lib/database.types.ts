@@ -248,6 +248,9 @@ export type PhotoRow = {
   /** Server-computed from business_roles; never trusted from the client. */
   by: PhotoCreditEnum;
   removal_requested: boolean;
+  /** F-BIZ-06 / F-MEDIA-06, owner-credited photos only. */
+  sort_order: number;
+  is_cover: boolean;
   created_at: string;
 };
 
@@ -425,7 +428,7 @@ export type Database = {
       };
       photos: {
         Row: PhotoRow;
-        Insert: Insertable<PhotoRow, 'id' | 'alt' | 'by' | 'removal_requested' | 'created_at'>;
+        Insert: Insertable<PhotoRow, 'id' | 'alt' | 'by' | 'removal_requested' | 'sort_order' | 'is_cover' | 'created_at'>;
         Update: Partial<PhotoRow>;
         Relationships: [];
       };
