@@ -15,13 +15,13 @@ WebBrowser.maybeCompleteAuthSession();
 import type {
   BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow, EventRow,
   MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
-  VenueEventRow, VenueOfferRow, VenueRow,
+  VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
   Booking, BusinessInvite, BusinessReplyTemplate, ClaimableBusinessRole, ContentReport,
   HappyHourWindow, InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction,
-  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueEvent,
-  VenueEventKind, VenueOffer,
+  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueClaim,
+  VenueClaimStatus, VenueEvent, VenueEventKind, VenueOffer,
 } from '@/types';
 
 /**
@@ -254,6 +254,20 @@ function mapContentReport(row: ContentReportRow): ContentReport {
     status: row.status,
     createdAt: row.created_at,
     resolvedAt: row.resolved_at ?? undefined,
+  };
+}
+
+function mapVenueClaim(row: VenueClaimRow, claimantName?: string): VenueClaim {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    userId: row.user_id,
+    claimantName,
+    role: row.role as ClaimableBusinessRole,
+    status: row.status,
+    note: row.note ?? undefined,
+    createdAt: row.created_at,
+    decidedAt: row.decided_at ?? undefined,
   };
 }
 
@@ -738,16 +752,20 @@ export async function reorderOwnerPhotos(orderedPhotoIds: string[]): Promise<{ o
 }
 
 /**
- * F-BIZ-01 (scoped): self-serve claim. See the migration header for why this
- * is self-attestation rather than the PRD's real multi-path verification —
- * it flips `venues.claimed`, never `venues.verified`. The database rejects
- * the insert outright if the venue already has a business_roles row held by
- * someone else, which surfaces here as `error`.
+ * F-BIZ-01 (scoped, admin-approval-gated): self-attested, but no longer
+ * self-serve — this only ever creates a *pending* venue_claims row now. It
+ * takes effect (flips venues.claimed, creates the real business_roles row)
+ * only once an admin approves it through decideVenueClaim below. See the
+ * migration header on 20260828100100_add_venue_claim_approval.sql for why,
+ * and for why this is still self-attestation, not the PRD's real multi-path
+ * verification, either way. The database rejects the insert outright if the
+ * venue is already claimed, or if another claim for it is already pending,
+ * both of which surface here as `error`.
  */
-export async function claimVenue(input: {
+export async function submitVenueClaim(input: {
   venueId: string;
   role: ClaimableBusinessRole;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; claim: VenueClaim } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) {
     return { ok: false, error: 'No backend configured; this listing could not be claimed.' };
   }
@@ -756,9 +774,78 @@ export async function claimVenue(input: {
   const user = auth?.user;
   if (!user) return { ok: false, error: 'Sign in to claim this listing.' };
 
+  const { data, error } = await supabase
+    .from('venue_claims')
+    .insert({ user_id: user.id, venue_id: input.venueId, role: input.role })
+    .select('*')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, claim: mapVenueClaim(data) };
+}
+
+/**
+ * The signed-in account's own most recent claim for this venue, if any —
+ * pending, approved, or rejected. Lets the claim screen show "you're
+ * waiting on review" or "this was rejected" instead of the form again.
+ */
+export async function getMyVenueClaim(venueId: string): Promise<VenueClaim | null> {
+  if (!hasBackend || !supabase) return null;
+  const { data } = await supabase
+    .from('venue_claims')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? mapVenueClaim(data) : null;
+}
+
+/** Withdraws the signed-in account's own claim — only while it is still pending (RLS enforces that). */
+export async function withdrawVenueClaim(claimId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to withdraw.' };
+  const { error } = await supabase.from('venue_claims').delete().eq('id', claimId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Admin-only queue (RLS restricts `select` on venue_claims to an admin or
+ * the claimant themselves — see venue_claims_read). Venue names come from
+ * the catalogue already loaded client-side, the same cross-reference
+ * ContentReport uses for its reviewId; claimant names need a real join,
+ * since a claimant isn't necessarily a public community member, the same
+ * reason getVenueBookings fetches guest names this way.
+ */
+export async function getVenueClaimQueue(): Promise<VenueClaim[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase.from('venue_claims').select('*').order('created_at', { ascending: false });
+  const rows = data ?? [];
+  if (!rows.length) return [];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+  const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', userIds);
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+
+  return rows.map((row) => mapVenueClaim(row, nameById[row.user_id]));
+}
+
+/**
+ * Approve or reject a pending claim. venue_claims_apply_decision() is what
+ * actually enforces who may call this (an admin — see
+ * 20260828100100_add_venue_claim_approval.sql) and, on approval, creates
+ * the real business_roles row and flips venues.claimed as a side effect —
+ * this only sends the decision.
+ */
+export async function decideVenueClaim(input: {
+  claimId: string;
+  status: Extract<VenueClaimStatus, 'approved' | 'rejected'>;
+  note?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to update.' };
   const { error } = await supabase
-    .from('business_roles')
-    .insert({ user_id: user.id, venue_id: input.venueId, role: input.role });
+    .from('venue_claims')
+    .update({ status: input.status, note: input.note ?? null })
+    .eq('id', input.claimId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

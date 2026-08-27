@@ -119,6 +119,8 @@ type Ctx = {
   platformRoles: PlatformRole[];
   isModerator: boolean;
   isTrustSafety: boolean;
+  /** F-BIZ-01: decides pending venue claims. See 20260828100000_add_admin_platform_role.sql. */
+  isAdmin: boolean;
 
   filters: FilterState;
   setFilters: (f: FilterState) => void;
@@ -807,6 +809,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       platformRoles,
       isModerator: platformRoles.includes('moderator'),
       isTrustSafety: platformRoles.includes('trust_safety'),
+      isAdmin: platformRoles.includes('admin'),
       filters,
       setFilters,
       resetFilters,

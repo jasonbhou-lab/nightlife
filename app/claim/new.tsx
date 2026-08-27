@@ -1,15 +1,16 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
-import { claimVenue } from '@/data/repository';
+import { getMyVenueClaim, submitVenueClaim, withdrawVenueClaim } from '@/data/repository';
+import { relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, space } from '@/theme';
-import type { ClaimableBusinessRole } from '@/types';
+import type { ClaimableBusinessRole, VenueClaim } from '@/types';
 
 const ROLES: { key: ClaimableBusinessRole; label: string }[] = [
   { key: 'owner', label: 'Owner' },
@@ -17,23 +18,28 @@ const ROLES: { key: ClaimableBusinessRole; label: string }[] = [
 ];
 
 /**
- * F-BIZ-01, scoped: see the migration header on
- * 20260825140000_add_business_claims.sql for why this is self-attestation,
- * not real verification. Gated the same as writing a review or adding a
- * photo — a "contribution" in the PRD's own terms (2.1).
+ * F-BIZ-01, tightened: confirming "I run this place" no longer creates
+ * business_roles on its own — it only ever files a pending venue_claims row
+ * now, which sits until an admin decides it. See the migration header on
+ * 20260828100100_add_venue_claim_approval.sql for why, and for why this is
+ * still self-attestation, not real verification, either way — there is no
+ * phone call, postcard, or document review behind it, just a human looking
+ * at what was submitted instead of the database accepting it on sight.
  */
 export default function ClaimVenueScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
-  const { session, attemptContribution, addManagedVenue } = useApp();
-  const { getVenue, markVenueClaimed } = useCatalogue();
+  const { session, now, attemptContribution } = useApp();
+  const { getVenue } = useCatalogue();
 
   const venue = getVenue(venueId);
   const [role, setRole] = useState<ClaimableBusinessRole>('owner');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [myClaim, setMyClaim] = useState<VenueClaim | null>(null);
+  const [loadingClaim, setLoadingClaim] = useState(true);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   // A one-time effect of viewing this gate, not something to redo every
   // render — calling it directly in the render body would change `session`,
@@ -41,6 +47,17 @@ export default function ClaimVenueScreen() {
   useEffect(() => {
     if (session.role === 'guest') attemptContribution();
   }, []);
+
+  const loadMyClaim = useCallback(() => {
+    if (!venue) return;
+    setLoadingClaim(true);
+    getMyVenueClaim(venue.id).then(setMyClaim).finally(() => setLoadingClaim(false));
+  }, [venue?.id]);
+
+  useEffect(() => {
+    if (venue && session.role !== 'guest') loadMyClaim();
+    else setLoadingClaim(false);
+  }, [venue?.id, session.role]);
 
   if (!venue) {
     return (
@@ -64,7 +81,7 @@ export default function ClaimVenueScreen() {
     );
   }
 
-  if (venue.claimed && !done) {
+  if (venue.claimed) {
     return (
       <Screen contentStyle={{ gap: space.lg }}>
         <ScreenHeader title="Claim this listing" subtitle={venue.name} onBack={() => router.back()} />
@@ -81,27 +98,56 @@ export default function ClaimVenueScreen() {
     );
   }
 
-  if (done) {
+  if (loadingClaim) {
     return (
       <Screen contentStyle={{ gap: space.lg }}>
-        <ScreenHeader title="Claimed" subtitle={venue.name} onBack={() => router.back()} />
+        <ScreenHeader title="Claim this listing" subtitle={venue.name} onBack={() => router.back()} />
+        <View style={gutter()}>
+          <Card><Body dim>Loading…</Body></Card>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (myClaim?.status === 'pending') {
+    const withdraw = async () => {
+      setWithdrawing(true);
+      setError(null);
+      const result = await withdrawVenueClaim(myClaim.id);
+      setWithdrawing(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setMyClaim(null);
+    };
+
+    return (
+      <Screen contentStyle={{ gap: space.lg }}>
+        <ScreenHeader title="Claim this listing" subtitle={venue.name} onBack={() => router.back()} />
         <View style={gutter()}>
           <Card>
             <View style={{ alignItems: 'center', gap: space.md }}>
-              <IconBadge icon="checkmark-circle" size={56} variant="solid" />
+              <IconBadge icon="time" size={56} />
               <Text style={[font.title, { color: theme.text, textAlign: 'center' }]}>
-                You manage this listing now
+                Pending review
               </Text>
               <Body dim style={{ textAlign: 'center' }}>
-                This is self-attested, not verified — the profile will show "Claimed and
-                unverified owner" until a real verification step exists. Nothing about the listing
-                itself changed yet.
+                Submitted {relativeDate(myClaim.createdAt.slice(0, 10), now)} as {myClaim.role}. This listing opens up
+                for you once an admin approves it — nothing about it has changed yet.
               </Body>
             </View>
           </Card>
         </View>
+        {error ? (
+          <View style={gutter()}>
+            <Callout tone="danger" icon="alert-circle" title="Could not withdraw">
+              <Body dim>{error}</Body>
+            </Callout>
+          </View>
+        ) : null}
         <View style={gutter()}>
-          <Button label="Back to the venue" full onPress={() => router.replace(`/venue/${venue.id}`)} />
+          <Button label="Withdraw this claim" variant="ghost" full loading={withdrawing} onPress={withdraw} />
         </View>
       </Screen>
     );
@@ -110,27 +156,35 @@ export default function ClaimVenueScreen() {
   const submit = async () => {
     setSubmitting(true);
     setError(null);
-    const result = await claimVenue({ venueId: venue.id, role });
+    const result = await submitVenueClaim({ venueId: venue.id, role });
     setSubmitting(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
-    markVenueClaimed(venue.id);
-    addManagedVenue(venue.id);
-    setDone(true);
+    setMyClaim(result.claim);
   };
 
   return (
     <Screen contentStyle={{ gap: space.lg }}>
       <ScreenHeader title="Claim this listing" subtitle={venue.name} onBack={() => router.back()} />
 
+      {myClaim?.status === 'rejected' ? (
+        <View style={gutter()}>
+          <Callout tone="danger" icon="close-circle" title="Your last claim was not accepted">
+            <Body dim>
+              {myClaim.note?.trim() ? myClaim.note : 'No reason was given.'} You can submit a new one below.
+            </Body>
+          </Callout>
+        </View>
+      ) : null}
+
       <View style={gutter()}>
-        <Callout tone="warn" icon="help-circle" title="Self-attested, not verified">
+        <Callout tone="warn" icon="help-circle" title="Self-attested, reviewed before it counts">
           <Body dim>
-            Confirming this is enough to have it show up as claimed and to open the business
-            tools this build has, but it does not verify you actually run {venue.name}. There is
-            no phone call, postcard, or document review behind this yet — just your say-so.
+            Confirming this submits it for review — it does not verify you actually run {venue.name},
+            just your say-so. An admin has to approve it before this listing shows as claimed and the
+            business tools here open up.
           </Body>
         </Callout>
       </View>
@@ -145,22 +199,22 @@ export default function ClaimVenueScreen() {
           </View>
           <Divider style={{ marginVertical: space.lg }} />
           <Body dim>
-            First claim wins. If {venue.name} is already claimed by the time this submits, the
-            claim is rejected rather than added alongside it.
+            Only one claim can be pending on {venue.name} at a time. If someone else's claim is
+            already waiting on review, this one is rejected outright rather than queued behind it.
           </Body>
         </Card>
       </View>
 
       {error ? (
         <View style={gutter()}>
-          <Callout tone="danger" icon="alert-circle" title="Could not claim this listing">
+          <Callout tone="danger" icon="alert-circle" title="Could not submit this claim">
             <Body dim>{error}</Body>
           </Callout>
         </View>
       ) : null}
 
       <View style={gutter()}>
-        <Button label="Claim this listing" icon="shield-checkmark" full loading={submitting} onPress={submit} />
+        <Button label="Submit for review" icon="shield-checkmark" full loading={submitting} onPress={submit} />
       </View>
     </Screen>
   );

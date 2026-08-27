@@ -43,9 +43,11 @@ type CatalogueCtx = {
    */
   addLocalPhoto: (venueId: string, photo: Photo) => void;
   /**
-   * F-BIZ-01: reflect a just-succeeded claim in this session without waiting
-   * on a full `reload()`. Only ever flips `claimed` — never `verified`,
-   * which self-attestation does not earn. See repository.claimVenue.
+   * F-BIZ-01: reflect a just-approved claim in this session (the admin's,
+   * not the claimant's — approving happens on a different account than the
+   * one that submitted it) without waiting on a full `reload()`. Only ever
+   * flips `claimed` — never `verified`, which self-attestation does not
+   * earn. See repository.decideVenueClaim.
    */
   markVenueClaimed: (venueId: string) => void;
   /**

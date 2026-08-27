@@ -160,20 +160,46 @@ and F-TRUST are out of scope for this client.
 
 **Venue claim** (`app/claim/new.tsx`, F-BIZ-01, scoped). The PRD's actual requirement is
 multi-path verification: an automated phone call, a postcard to the listed address, an email at
-a matching domain, or manual document review. None of those exist here. This was originally built
-before real Supabase Auth existed in this client at all, back when nothing could check a domain
-against a confirmed email even in principle — that gap is closed now (see *Real Supabase Auth*
-below), but this feature's scope did not change with it: signing in and asserting a role (`owner`
-or `manager`) creates a genuine `business_roles` row and flips `venues.claimed`, exactly the way
-filing a photo removal request creates a real record with no queue behind it (see *Photo upload*
-below). `venues.verified` is deliberately never touched by this path — it stays false, which the
-venue profile already rendered as "Claimed and unverified owner" before this feature existed, so
-the self-attested state is not a broken one. First claim wins; a venue with an existing
-`business_roles` row rejects further self-serve claims, and ownership transfer and disputes
-(F-BIZ-02) are out of scope.
+a matching domain, or manual document review. None of those exist here. What exists instead:
+signing in and asserting a role (`owner` or `manager`) files a `venue_claims` row and stops
+there — it neither creates a `business_roles` row nor flips `venues.claimed` on its own anymore.
+Both of those now happen only once an admin approves it (see *Venue claim approval* right below);
+before this session that self-attested confirmation took effect instantly, the same way filing a
+photo removal request creates a real record with no queue behind it (see *Photo upload* below) —
+claiming a venue no longer works that way, on request, specifically because letting anyone
+instantly gain control of any unclaimed listing was too permissive for what it actually unlocks
+(booking, messaging, and review-management tools on someone else's business). `venues.verified` is
+still deliberately never touched by this path — it stays false, which the venue profile already
+renders as "Claimed and unverified owner," so the self-attested state is not a broken one even
+once approved. Only one claim can be pending on a venue at a time (a partial unique index, not a
+client-side check); a rejected claim frees the venue up for another attempt, and ownership
+transfer and disputes for an *already-claimed* venue (F-BIZ-02) are still out of scope.
+
+**Venue claim approval** (`app/admin/claims.tsx`, `app/(tabs)/profile.tsx`'s entry card). A new
+`admin` platform role (`20260828100000_add_admin_platform_role.sql`) — distinct from moderator and
+trust_safety, since deciding who runs a venue isn't a content-moderation call — with the same no
+self-serve path every platform role in this app has: granted directly in the database, never
+through the client. An admin sees every pending claim and can approve or reject it, with an
+optional note shown back to the claimant on rejection; approving is what actually inserts the
+`business_roles` row and flips `venues.claimed`, done atomically inside
+`venue_claims_apply_decision()` (a `BEFORE UPDATE` trigger, the same shape
+`content_reports_apply_moderation()` already uses for the moderation queue), not assembled by the
+client across separate writes. Retiring the original self-serve path meant closing the door it
+wrote through entirely, not just routing around it: `business_roles_claim_own` — the policy that
+let any authenticated account insert its own `business_roles` row — is dropped outright, which
+also surfaced and fixed a real, separate bug: that same policy's role check only ever allowed
+`owner`/`manager`, so an invited **staff** member accepting their own invite (F-BIZ-13) had been
+silently rejected by RLS this whole time. What replaces it now checks a real, unconsumed invite for
+the exact venue, role, and the caller's own confirmed email, for both invite roles.
+Verifying the approval path live also surfaced a second bug, caught before it shipped: the
+existing `business_roles_mark_venue_claimed()` trigger had always relied on the account performing
+the insert already holding a business role at the venue, true for the original self-serve claim and
+for invite acceptance, false for an admin approving *someone else's* claim — so approval silently
+failed to ever flip `claimed` on the first pass. Fixed with an explicit, narrow bypass flag rather
+than loosening the actor check (see the header on `20260828100200_fix_claim_approval_venue_write.sql`).
 
 **Real Supabase Auth** (`app/auth.tsx`, `src/data/repository.ts`). Every backend-write function in
-this app — `publishReview`, `saveBooking`, `createMessageThread`, `uploadPhoto`, `claimVenue` —
+this app — `publishReview`, `saveBooking`, `createMessageThread`, `uploadPhoto`, `submitVenueClaim` —
 calls `supabase.auth.getUser()`, but nothing ever actually signed anyone in for real: `AppProvider`
 only ever set local, unpersisted-past-this-device mock state. That is fixed for every user now,
 not just for the claim flow: sign-in is a real one-time code emailed via Supabase Auth, no
@@ -432,7 +458,8 @@ Postgres happened to return, not a real sort.
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
   claimed/unclaimed states, closure and successor handling. Twelve exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
-  (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about editor
+  (self-attestation gated behind admin approval, not the PRD's actual multi-path verification),
+  F-BIZ-03's tagline/about editor
   (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-06's cover photo and reorder (owner-credited photos only,
@@ -545,6 +572,13 @@ presentation only. So:
   can read its own venue's raw events back; a different venue's events are invisible even to a
   business account, and the client-side aggregation in `src/lib/analytics.ts` never sees them to
   begin with (F-BIZ-08).
+- A venue claim can only ever be inserted as `pending`, by the claimant, for a venue that isn't
+  already claimed; only an admin's `UPDATE` can move it to `approved` or `rejected`, and that
+  `UPDATE` may only ever touch `status` and `note` — a jsonb-diff guard rejects anything else on
+  the row changing in the same statement. `business_roles` itself has no client-facing insert path
+  left for a fresh claim at all; the only doors onto it are accepting a real invite (checked against
+  an actual, unconsumed `business_invites` row) and the claim-approval trigger, which runs as the
+  system, not as the admin who triggered it (F-BIZ-01).
 
 One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
 enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus

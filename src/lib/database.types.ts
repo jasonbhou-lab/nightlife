@@ -32,7 +32,8 @@ export type PhotoAlbumEnum =
   | 'food' | 'drink' | 'interior' | 'exterior' | 'menu' | 'crowd' | 'humidor' | 'stage' | 'table';
 export type PhotoCreditEnum = 'owner' | 'community';
 export type BusinessRoleEnum = 'owner' | 'manager' | 'staff' | 'group_admin';
-export type PlatformRoleEnum = 'moderator' | 'trust_safety';
+export type PlatformRoleEnum = 'moderator' | 'trust_safety' | 'admin';
+export type VenueClaimStatusEnum = 'pending' | 'approved' | 'rejected';
 export type ReportReasonEnum =
   | 'not_a_real_visit' | 'conflict_of_interest' | 'harassment_or_hate_speech'
   | 'privacy_violation' | 'irrelevant_or_promotional';
@@ -293,6 +294,18 @@ export type PlatformRoleRow = {
   created_at: string;
 };
 
+export type VenueClaimRow = {
+  id: string;
+  venue_id: string;
+  user_id: string;
+  role: BusinessRoleEnum;
+  status: VenueClaimStatusEnum;
+  note: string | null;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+};
+
 export type ContentReportRow = {
   id: string;
   review_id: string;
@@ -409,6 +422,12 @@ export type Database = {
         Update: Partial<BusinessInviteRow>;
         Relationships: [];
       };
+      venue_claims: {
+        Row: VenueClaimRow;
+        Insert: Insertable<VenueClaimRow, 'id' | 'status' | 'note' | 'created_at' | 'decided_at' | 'decided_by'>;
+        Update: Partial<VenueClaimRow>;
+        Relationships: [];
+      };
       venue_offers: {
         Row: VenueOfferRow;
         Insert: Insertable<VenueOfferRow, 'id' | 'starts_at' | 'ends_at' | 'created_at'>;
@@ -485,6 +504,7 @@ export type Database = {
       photo_album: PhotoAlbumEnum;
       photo_credit: PhotoCreditEnum;
       platform_role: PlatformRoleEnum;
+      venue_claim_status: VenueClaimStatusEnum;
       report_reason: ReportReasonEnum;
       report_status: ReportStatusEnum;
       moderation_action_kind: ModerationActionKindEnum;

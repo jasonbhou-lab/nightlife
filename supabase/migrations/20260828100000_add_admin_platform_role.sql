@@ -1,0 +1,12 @@
+-- Venue-claim approval (see the migration right after this one) needs a new
+-- kind of platform actor: an app admin who decides whether a self-attested
+-- claim gets accepted, distinct from moderator (content reports) and
+-- trust_safety (Consumer Alerts, contribution freezes) — approving who runs
+-- a venue is not a content-moderation decision. Same as those two,
+-- platform_roles has no self-serve insert policy at all: this role is
+-- granted directly in the database, never through the client.
+--
+-- Postgres will not let a new enum value be referenced anywhere in the same
+-- transaction it was added in, so this is its own migration — the table and
+-- functions that actually use 'admin' are in the one right after this.
+alter type platform_role add value 'admin';

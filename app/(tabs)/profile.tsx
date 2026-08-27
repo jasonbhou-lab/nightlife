@@ -28,6 +28,7 @@ export default function ProfileScreen() {
     session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
     followedMemberIds, followedVenueIds, checkIns, addManagedVenue, isModerator, isTrustSafety,
+    isAdmin,
   } = useApp();
   const { reviews, venueById, source } = useCatalogue();
 
@@ -172,6 +173,24 @@ export default function ProfileScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[font.cardTitle, { color: theme.text }]}>Moderation queue</Text>
                 <Body dim>{isTrustSafety ? 'Trust & Safety' : 'Moderator'} access</Body>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
+            </View>
+          </Card>
+        </View>
+      ) : null}
+
+      {/* F-BIZ-01: an admin account gets a way into the venue-claim approval
+          queue. Nobody else ever sees this — there is no self-serve path to
+          the role (see 20260828100000_add_admin_platform_role.sql). */}
+      {isAdmin ? (
+        <View style={gutter()}>
+          <Card onPress={() => router.push('/admin/claims')}>
+            <View style={[ui.row, { gap: space.md }]}>
+              <IconBadge icon="business" size={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={[font.cardTitle, { color: theme.text }]}>Venue claims</Text>
+                <Body dim>Admin access</Body>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
             </View>

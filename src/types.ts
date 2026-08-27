@@ -178,14 +178,39 @@ export type BusinessInvite = {
   acceptedAt?: string;
 };
 
+export type VenueClaimStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * F-BIZ-01, tightened: a claim no longer creates a business_roles row on
+ * its own. It sits here, pending, until an admin decides it — see the
+ * migration header on 20260828100100_add_venue_claim_approval.sql.
+ * `claimantName` is only ever populated for the admin queue (a device-side
+ * join against `profiles`, the same convention Booking.guestName uses) —
+ * the claimant reading their own claim already knows who they are.
+ */
+export type VenueClaim = {
+  id: string;
+  venueId: string;
+  userId: string;
+  claimantName?: string;
+  role: ClaimableBusinessRole;
+  status: VenueClaimStatus;
+  note?: string;
+  createdAt: string;
+  decidedAt?: string;
+};
+
 /**
  * F-TRUST, scoped. There is no self-serve claim for a platform role the way
  * business_roles has one — a row is granted directly in the database (see
  * the migration header on 20260826110000_add_trust_and_safety.sql). Moderator
  * works the reviews queue; trust_safety adds Consumer Alerts, freezing
- * contribution on a listing, and resolving what a moderator escalates.
+ * contribution on a listing, and resolving what a moderator escalates;
+ * admin decides venue claims (F-BIZ-01) — see
+ * 20260828100000_add_admin_platform_role.sql for why it's a separate role
+ * from the other two rather than an overload of "moderator".
  */
-export type PlatformRole = 'moderator' | 'trust_safety';
+export type PlatformRole = 'moderator' | 'trust_safety' | 'admin';
 
 export type ReportReason =
   | 'not_a_real_visit' | 'conflict_of_interest' | 'harassment_or_hate_speech'
