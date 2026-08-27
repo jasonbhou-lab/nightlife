@@ -5,9 +5,9 @@ import React, {
 import { useColorScheme } from 'react-native';
 
 import {
-  createMessageThread, getAuthSnapshot, getManagedVenueIds, getPlatformRoles, onAuthSignedOut,
-  sendMessage as sendMessageRemote, sendSignInCode as sendSignInCodeRemote, signOutRemote,
-  verifySignInCode as verifySignInCodeRemote, type AuthProfile,
+  cancelBookingRemote, createMessageThread, getAuthSnapshot, getManagedVenueIds, getPlatformRoles,
+  onAuthSignedOut, sendMessage as sendMessageRemote, sendSignInCode as sendSignInCodeRemote,
+  signOutRemote, verifySignInCode as verifySignInCodeRemote, type AuthProfile,
 } from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
 import { hasBackend } from '@/lib/supabase';
@@ -537,6 +537,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [persist],
   );
 
+  /** A remote row id (uuid) versus a device-local `<prefix>-<timestamp>` fallback. */
+  const isRemoteId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
+
+  /**
+   * Found missing while building the F-BIZ-11 business console: this only
+   * ever updated local device state, so a venue reading the real `bookings`
+   * table would see a permanently-stale status for anything its own guest
+   * had "cancelled." Best-effort mirror, the same shape as sendThreadMessage
+   * below — local state is already updated by the time the remote call
+   * fires, and a local-only booking (no backend, or the pre-fix local id
+   * shape) has nothing real to cancel remotely anyway.
+   */
   const cancelBooking = useCallback(
     (id: string) => {
       setBookings((prev) => {
@@ -544,6 +556,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         persist(KEYS.bookings, next);
         return next;
       });
+      if (isRemoteId(id)) {
+        cancelBookingRemote(id).catch(() => {
+          /* Best-effort mirror. The cancellation already lives on this device. */
+        });
+      }
     },
     [persist],
   );
@@ -556,9 +573,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [persist],
   );
-
-  /** A remote row id (uuid) versus a `t-<timestamp>` local-only fallback. */
-  const isRemoteId = (id: string) => /^[0-9a-f-]{36}$/i.test(id);
 
   const startThread = useCallback(
     async (venueId: string, kind: MessageThreadKind, subject?: string): Promise<string> => {

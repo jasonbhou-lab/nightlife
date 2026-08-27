@@ -9,8 +9,10 @@ import {
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { saveBooking } from '@/data/repository';
 import { bookingModeLabel, money } from '@/lib/format';
 import { formatTime, isOpenAt, venueState } from '@/lib/hours';
+import { hasBackend } from '@/lib/supabase';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
 import type { Booking, BookingMode, TableTier, Venue } from '@/types';
@@ -301,6 +303,31 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Persist a booking remotely when a backend is configured, falling back to a
+ * local-only id otherwise (U-07: still works offline, the same fallback
+ * every other write in this app uses). Returns null (after showing why) when
+ * a backend is configured but the write was rejected — unlike the
+ * no-backend case, a rejected write must not be shown as confirmed, since
+ * there is genuinely no reservation on the venue's side to show.
+ *
+ * Found missing while building the F-BIZ-11 business console: every one of
+ * this screen's five booking forms only ever wrote to local device state —
+ * `saveBooking` existed in the repository layer and was never called from
+ * anywhere, so no booking made through this app had ever reached the
+ * backend. A console reading the real `bookings` table would have shown
+ * nothing for any of them.
+ */
+async function persistBooking(input: Parameters<typeof saveBooking>[0]): Promise<string | null> {
+  if (!hasBackend) return `b-${Date.now()}`;
+  const result = await saveBooking(input);
+  if (!result.ok) {
+    Alert.alert('Could not confirm', result.error);
+    return null;
+  }
+  return result.id;
+}
+
 /* ------------------------------------------------------- reservation form */
 
 function ReservationForm({ venue }: { venue: Venue }) {
@@ -315,6 +342,7 @@ function ReservationForm({ venue }: { venue: Venue }) {
   const [notes, setNotes] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const date = dates[dateIdx];
   const slots = slotsFor(venue, date.dow);
@@ -468,20 +496,34 @@ function ReservationForm({ venue }: { venue: Venue }) {
       <Button
         label={time ? `Confirm ${formatTime(time)} for ${party}` : 'Pick a time'}
         full
+        loading={submitting}
         disabled={!time || (needsTerms && !accepted)}
-        onPress={() => {
+        onPress={async () => {
           if (!time) return;
-          const b: Booking = {
-            id: `b-${Date.now()}`,
+          const bookingNotes = [seating && seating !== 'No preference' ? seating : null, notes.trim() || null]
+            .filter(Boolean)
+            .join(' · ') || undefined;
+          setSubmitting(true);
+          const id = await persistBooking({
             venueId: venue.id,
             kind: 'reservation',
             date: date.iso,
             time,
             partySize: party,
             status: 'confirmed',
-            notes: [seating && seating !== 'No preference' ? seating : null, notes.trim() || null]
-              .filter(Boolean)
-              .join(' · ') || undefined,
+            notes: bookingNotes,
+          });
+          setSubmitting(false);
+          if (!id) return;
+          const b: Booking = {
+            id,
+            venueId: venue.id,
+            kind: 'reservation',
+            date: date.iso,
+            time,
+            partySize: party,
+            status: 'confirmed',
+            notes: bookingNotes,
             createdAt: now.toISOString(),
           };
           addBooking(b);
@@ -523,6 +565,7 @@ function TableServiceForm({ venue }: { venue: Venue }) {
   const [window, setWindow] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const tables = venue.tables ?? [];
   const sections = Array.from(new Set(tables.map((t) => t.section)));
@@ -619,6 +662,7 @@ function TableServiceForm({ venue }: { venue: Venue }) {
         }
         icon="card"
         full
+        loading={submitting}
         disabled={!table || !window || !accepted || party > table.seats}
         onPress={() => {
           if (!table || !window) return;
@@ -632,9 +676,23 @@ function TableServiceForm({ venue }: { venue: Venue }) {
               { text: 'Go back', style: 'cancel' },
               {
                 text: `Pay ${money(deposit)}`,
-                onPress: () => {
+                onPress: async () => {
+                  setSubmitting(true);
+                  const id = await persistBooking({
+                    venueId: venue.id,
+                    kind: 'table_service',
+                    date: dates[dateIdx].iso,
+                    time: window,
+                    partySize: party,
+                    tier: `${table.name} · ${table.section}`,
+                    deposit,
+                    status: 'confirmed',
+                    termsText: venue.bookingTerms,
+                  });
+                  setSubmitting(false);
+                  if (!id) return;
                   const b: Booking = {
-                    id: `b-${Date.now()}`,
+                    id,
                     venueId: venue.id,
                     kind: 'table_service',
                     date: dates[dateIdx].iso,
@@ -664,6 +722,7 @@ function WaitlistForm({ venue }: { venue: Venue }) {
   const { addBooking, now } = useApp();
   const [party, setParty] = useState(2);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const state = venueState(venue, now);
   const hour = now.getHours();
@@ -715,14 +774,30 @@ function WaitlistForm({ venue }: { venue: Venue }) {
       <Button
         label={`Join the waitlist for ${party}`}
         full
+        loading={submitting}
         disabled={!state.open}
-        onPress={() => {
-          const b: Booking = {
-            id: `b-${Date.now()}`,
+        onPress={async () => {
+          const date = now.toISOString().slice(0, 10);
+          const time = `${String(hour).padStart(2, '0')}:00`;
+          setSubmitting(true);
+          const id = await persistBooking({
             venueId: venue.id,
             kind: 'waitlist',
-            date: now.toISOString().slice(0, 10),
-            time: `${String(hour).padStart(2, '0')}:00`,
+            date,
+            time,
+            partySize: party,
+            status: 'waitlisted',
+            waitlistPosition: position,
+            waitMinutes: wait,
+          });
+          setSubmitting(false);
+          if (!id) return;
+          const b: Booking = {
+            id,
+            venueId: venue.id,
+            kind: 'waitlist',
+            date,
+            time,
             partySize: party,
             status: 'waitlisted',
             waitlistPosition: position,
@@ -756,6 +831,7 @@ function BarHoldForm({ venue }: { venue: Venue }) {
   const [notes, setNotes] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const options = useMemo(() => {
     const out: { key: string; label: string; detail: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -881,18 +957,34 @@ function BarHoldForm({ venue }: { venue: Venue }) {
       <Button
         label={!kind ? 'Pick what you need' : !window ? 'Pick a time' : requestOnly ? 'Send request' : 'Hold it'}
         full
+        loading={submitting}
         disabled={!kind || !window || (!!venue.bookingTerms && !accepted)}
-        onPress={() => {
+        onPress={async () => {
           if (!kind || !window) return;
-          const b: Booking = {
-            id: `b-${Date.now()}`,
+          const status = requestOnly ? 'requested' : 'confirmed';
+          const holdNotes = [options.find((o) => o.key === kind)?.label, notes.trim() || null].filter(Boolean).join(' · ');
+          setSubmitting(true);
+          const id = await persistBooking({
             venueId: venue.id,
             kind: 'bar_hold',
             date: dates[dateIdx].iso,
             time: window,
             partySize: party,
-            status: requestOnly ? 'requested' : 'confirmed',
-            notes: [options.find((o) => o.key === kind)?.label, notes.trim() || null].filter(Boolean).join(' · '),
+            status,
+            notes: holdNotes,
+            termsText: venue.bookingTerms,
+          });
+          setSubmitting(false);
+          if (!id) return;
+          const b: Booking = {
+            id,
+            venueId: venue.id,
+            kind: 'bar_hold',
+            date: dates[dateIdx].iso,
+            time: window,
+            partySize: party,
+            status,
+            notes: holdNotes,
             createdAt: now.toISOString(),
           };
           addBooking(b);
@@ -912,6 +1004,7 @@ function InquiryForm({ venue }: { venue: Venue }) {
   const [topic, setTopic] = useState<'membership' | 'locker' | 'event'>('membership');
   const [notes, setNotes] = useState('');
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const locker = venue.attributes.lockerProgram;
   const model = venue.attributes.membershipModel;
@@ -1029,17 +1122,33 @@ function InquiryForm({ venue }: { venue: Venue }) {
         label="Send inquiry"
         icon="paper-plane"
         full
+        loading={submitting}
         disabled={!notes.trim()}
-        onPress={() => {
-          const b: Booking = {
-            id: `b-${Date.now()}`,
+        onPress={async () => {
+          const date = now.toISOString().slice(0, 10);
+          const time = `${String(now.getHours()).padStart(2, '0')}:00`;
+          const inquiryNotes = `${topic}: ${notes.trim()}`;
+          setSubmitting(true);
+          const id = await persistBooking({
             venueId: venue.id,
             kind: 'inquiry',
-            date: now.toISOString().slice(0, 10),
-            time: `${String(now.getHours()).padStart(2, '0')}:00`,
+            date,
+            time,
             partySize: 1,
             status: 'requested',
-            notes: `${topic}: ${notes.trim()}`,
+            notes: inquiryNotes,
+          });
+          setSubmitting(false);
+          if (!id) return;
+          const b: Booking = {
+            id,
+            venueId: venue.id,
+            kind: 'inquiry',
+            date,
+            time,
+            partySize: 1,
+            status: 'requested',
+            notes: inquiryNotes,
             createdAt: now.toISOString(),
           };
           addBooking(b);

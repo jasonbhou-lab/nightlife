@@ -3,13 +3,13 @@ import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
 import type {
-  BusinessInviteRow, ContentReportRow, EventRow, ModerationActionRow, PhotoRow, ReviewRow,
-  TableTierRow, VenueOfferRow, VenueRow,
+  BookingRow, BusinessInviteRow, ContentReportRow, EventRow, ModerationActionRow, PhotoRow,
+  ReviewRow, TableTierRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  BusinessInvite, ClaimableBusinessRole, ContentReport, HappyHourWindow, InvitableBusinessRole,
-  MenuSection, ModerationAction, Photo, PlatformRole, ReportReason, Review, Schedule, Venue,
-  VenueEvent, VenueOffer,
+  Booking, BusinessInvite, ClaimableBusinessRole, ContentReport, HappyHourWindow,
+  InvitableBusinessRole, MenuSection, ModerationAction, Photo, PlatformRole, ReportReason, Review,
+  Schedule, Venue, VenueEvent, VenueOffer,
 } from '@/types';
 
 /**
@@ -176,6 +176,25 @@ function mapVenueOffer(row: VenueOfferRow): VenueOffer {
     startsAt: row.starts_at,
     endsAt: row.ends_at ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+function mapBooking(row: BookingRow, guestName?: string): Booking {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    kind: row.kind,
+    date: row.booking_date,
+    time: trimTime(row.booking_time),
+    partySize: row.party_size,
+    tier: row.tier ?? undefined,
+    deposit: row.deposit ?? undefined,
+    status: row.status,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    waitlistPosition: row.waitlist_position ?? undefined,
+    waitMinutes: row.wait_minutes ?? undefined,
+    guestName,
   };
 }
 
@@ -450,6 +469,21 @@ export async function saveBooking(input: {
 
   if (error) return { ok: false, error: error.message };
   return { ok: true, id: data.id };
+}
+
+/**
+ * Cancel your own booking on the backend. Found missing while building the
+ * F-BIZ-11 business console: AppProvider's cancelBooking only ever flipped
+ * local device state, so a business reading the real `bookings` table would
+ * see a permanently-stale status for anything its own guest had "cancelled."
+ * Best-effort, mirrored the same way sendMessage is — the local state is
+ * already updated by the time this is called (see AppProvider.cancelBooking).
+ */
+export async function cancelBookingRemote(bookingId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; kept on this device only.' };
+  const { error } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /** Mirror a locally-saved review draft to the account so it follows devices. */
@@ -940,6 +974,55 @@ export async function getModerationHistory(): Promise<ModerationAction[]> {
   if (!hasBackend || !supabase) return [];
   const { data } = await supabase.from('moderation_actions').select('*').order('created_at', { ascending: false }).limit(100);
   return (data ?? []).map(mapModerationAction);
+}
+
+/* ------------------------------------------------------------------ F-BIZ-11 */
+
+/**
+ * F-BIZ-11, scoped: every booking and waitlist entry at a venue this account
+ * manages — see the migration header on 20260826120000_add_business_bookings.sql
+ * for why there's no floor map or staff assignment. `guestName` is a
+ * device-side join against `profiles`, and is absent when the guest's
+ * profile isn't public — this never fabricates a name.
+ */
+export async function getVenueBookings(venueId: string): Promise<Booking[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('booking_date', { ascending: true })
+    .order('booking_time', { ascending: true });
+  const rows = data ?? [];
+  if (!rows.length) return [];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+  const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', userIds);
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+
+  return rows.map((row) => mapBooking(row, nameById[row.user_id]));
+}
+
+/**
+ * The database — not this function — enforces "only status, wait time, and
+ * waitlist position, only for a venue you manage" (bookings_guard_business_write
+ * in the migration above), the same shape as every other business write here.
+ */
+export async function updateBookingStatus(input: {
+  bookingId: string;
+  status: 'confirmed' | 'waitlisted' | 'cancelled';
+  waitMinutes?: number;
+  waitlistPosition?: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
+  const patch: { status: 'confirmed' | 'waitlisted' | 'cancelled'; wait_minutes?: number; waitlist_position?: number } = {
+    status: input.status,
+  };
+  if (input.waitMinutes != null) patch.wait_minutes = input.waitMinutes;
+  if (input.waitlistPosition != null) patch.waitlist_position = input.waitlistPosition;
+  const { error } = await supabase.from('bookings').update(patch).eq('id', input.bookingId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------- auth */

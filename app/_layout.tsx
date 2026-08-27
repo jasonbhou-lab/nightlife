@@ -32,6 +32,7 @@ function Shell() {
         <Stack.Screen name="venue/[id]" />
         <Stack.Screen name="venue/edit" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="venue/offers" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="venue/bookings" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="reviews/[id]" />
         <Stack.Screen name="menu/[id]" />
         <Stack.Screen name="menu/edit" options={{ animation: 'slide_from_bottom' }} />

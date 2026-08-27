@@ -446,6 +446,15 @@ export type Booking = {
   /** Position in the remote waitlist (F-BOOK-04). */
   waitlistPosition?: number;
   waitMinutes?: number;
+  /**
+   * F-BIZ-11, business-console reads only. `bookings` has no denormalized
+   * guest name the way reviews does — this comes from a device-side join
+   * against `profiles.display_name`, which is only visible when the guest's
+   * profile is public (the default) or the reader is the guest themselves.
+   * Absent on a private profile; the console falls back to "Guest" rather
+   * than inventing a name.
+   */
+  guestName?: string;
 };
 
 /**

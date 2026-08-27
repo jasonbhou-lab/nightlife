@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 03, 04, 05, 07, 09, 13, 15 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 03, 04, 05, 07, 09, 11, 13, 15 (each scoped down — see below) |
 | Trust & Safety | F-TRUST-01, 04, 06, 08 (scoped — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
@@ -287,6 +287,30 @@ the only content type with a real report entry point in this client). Every mode
 resolves a specific report on file — there is no "just remove this" door for a moderator
 patrolling without one.
 
+**Reservation and waitlist console** (`app/venue/bookings.tsx`, F-BIZ-11, scoped). Real visibility
+into bookings and waitlist entries at a venue a business account manages — confirm a requested
+table, cancel a no-show, seat or remove someone waitlisted — matching the "manage reservations and
+waitlist" cell the permission matrix (Section 2.4) already claimed for R7/R8/R9. No floor map, no
+real-time table-tier status, no staff assignment: those need an interactive room-map UI built
+against `table_tiers`, a genuinely different feature from giving a business a list it can act on.
+`guestName` comes from a device-side join against `profiles`, and is absent (falls back to
+"Guest") rather than invented when the guest's own profile isn't public.
+
+Building this surfaced the largest gap found this session: `saveBooking` had existed in the
+repository layer since early in the build, fully wired to real RLS, and **nothing had ever called
+it**. Every one of `app/book/[id].tsx`'s five booking forms (reservation, table service, waitlist,
+bar hold, inquiry) only ever wrote to local device state. No booking made through this app, in any
+prior session, had ever reached the backend — a business console reading the real `bookings` table
+would have shown nothing, for anything, ever. Fixed alongside this feature, not as a separate
+pass, because a console with permanently zero real data is not a feature, it's decoration: all
+five forms now call `saveBooking` when a backend is configured, use its real id, and only show a
+confirmation once that succeeds — falling back to a local-only id exactly as before when there is
+no backend (U-07). A second, smaller instance of the same shape of bug came with it:
+`AppProvider.cancelBooking` also only ever updated local device state, so a guest cancelling their
+own booking would have left a permanently-stale row for the venue to see. Both are fixed the same
+way messaging already handles this — local state updates immediately, the remote write mirrors it
+best-effort afterward.
+
 ## What is deliberately not implemented
 
 - **No payments.** Deposit flows display real terms and capture affirmative acceptance, then stop.
@@ -314,18 +338,20 @@ patrolling without one.
 - **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
   the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
-  claimed/unclaimed states, closure and successor handling. Eight exceptions are real, scoped-down
+  claimed/unclaimed states, closure and successor handling. Nine exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
   (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about editor
   (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-07's review response composer (no sentiment summary,
   keyword themes, or alerting), F-BIZ-09's offers (self-published only — no budget, targeting, or
-  ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-13's invite-a-manager flow
-  (manager/staff only, no access audit log), and F-BIZ-15's own-data export (reviews and media, not
-  analytics — there is none to export — and not the team roster). Everything else — the typed
-  attributes themselves, media management, analytics, advertising, and the rest of F-BIZ-02
-  through 15 — has no dashboard here at all. F-TRUST is a partial exception of its own now — see
+  ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-11's reservation and waitlist
+  console (no floor map, real-time table-tier status, or staff assignment), F-BIZ-13's
+  invite-a-manager flow (manager/staff only, no access audit log), and F-BIZ-15's own-data export
+  (reviews and media, not analytics — there is none to export — and not the team roster).
+  Everything else — the typed attributes themselves, media management, analytics, advertising, and
+  the rest of F-BIZ-02 through 15 — has no dashboard here at all. F-TRUST is a partial exception of
+  its own now — see
   *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer
   Alert/contribution-freeze controls, not the full moderation console (no automated pre-screening,
   coordinated-behavior detection, appeal flow, or transparency reporting).
@@ -400,6 +426,9 @@ presentation only. So:
 - Bookings, collections, and drafts are readable and writable only by their owner. Shared
   collections are readable by link, which is the one deliberate exception.
 - A deposit cannot be recorded without the terms acceptance that F-BOOK-11 requires.
+- A business account can see and move a booking through its lifecycle at a venue it manages, but
+  only through `status`, `wait_minutes`, and `waitlist_position` — the guest's own submission
+  (date, time, party size, deposit, notes) is off limits through that door (F-BIZ-11).
 - A message thread's `sender` column is constrained to `'user'` at the schema level, and a rate
   limit (5 seconds per thread, 40 per account per hour) is enforced by trigger, not just by the
   composer disabling Send (F-MSG-04, NFR-11).
