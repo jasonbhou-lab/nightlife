@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Card, Chip, Divider, Label, styles as ui } from '@/components/ui';
 import { filterableForVerticals, groupLabels } from '@/data/attributes';
 import { useCatalogue } from '@/data/catalogue';
-import { verticalMeta, VERTICALS } from '@/data/taxonomy';
+import { categories as categoriesByVertical, verticalMeta, VERTICALS } from '@/data/taxonomy';
 import { searchVenues } from '@/lib/search';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -70,6 +70,28 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
 
   const defs = useMemo(() => filterableForVerticals(draft.verticals), [draft.verticals]);
 
+  /**
+   * Cuisine and atmosphere: the venue's own subcategory (Tex-Mex, Speakeasy,
+   * Dive Bar, Latin Club), not the platform-race-based tagging that was
+   * originally proposed — venues describe their own culinary tradition, music
+   * programming, and theme; the taxonomy never describes who a venue's
+   * customers are. Grouped by vertical whenever more than one is active, same
+   * as the "showing filters common to all five" default the attribute list
+   * already uses.
+   */
+  const categoryGroups = useMemo(() => {
+    const active = draft.verticals.length ? draft.verticals : VERTICALS;
+    return active.map((v) => ({ vertical: v, values: categoriesByVertical[v] }));
+  }, [draft.verticals]);
+
+  const toggleCategory = (cat: string) => {
+    setDraft((prev) => {
+      const has = prev.categories.includes(cat);
+      const categories = has ? prev.categories.filter((c) => c !== cat) : [...prev.categories, cat];
+      return { ...prev, categories };
+    });
+  };
+
   const grouped = useMemo(() => {
     const map = new Map<AttributeGroup, AttributeDef[]>();
     for (const d of defs) {
@@ -98,7 +120,10 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
       const attributes = Object.fromEntries(
         Object.entries(prev.attributes).filter(([k]) => allowed.has(k)),
       );
-      return { ...prev, verticals, attributes };
+      // Same for cuisine/atmosphere picks tied to a vertical that just dropped out.
+      const allowedCats = new Set((verticals.length ? verticals : VERTICALS).flatMap((x) => categoriesByVertical[x]));
+      const categories = prev.categories.filter((c) => allowedCats.has(c));
+      return { ...prev, verticals, attributes, categories };
     });
   };
 
@@ -171,6 +196,36 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
                     </Pressable>
                   );
                 })}
+              </View>
+            </Card>
+
+            {/* Cuisine and atmosphere: the venue's own culinary tradition, music
+                programming, and theme — not who its customers are. */}
+            <Card>
+              <Label>Cuisine & atmosphere</Label>
+              <Text style={[font.small, { color: theme.textFaint, marginTop: 2, marginBottom: space.md }]}>
+                The specific style of the space, like Tex-Mex, Speakeasy, or Latin Club.
+              </Text>
+              <View style={{ gap: space.md }}>
+                {categoryGroups.map(({ vertical, values }) => (
+                  <View key={vertical}>
+                    {categoryGroups.length > 1 ? (
+                      <Text style={[font.meta, { color: theme.textDim, marginBottom: space.sm }]}>
+                        {verticalMeta[vertical].plural}
+                      </Text>
+                    ) : null}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                      {values.map((cat) => (
+                        <Chip
+                          key={cat}
+                          label={cat}
+                          selected={draft.categories.includes(cat)}
+                          onPress={() => toggleCategory(cat)}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                ))}
               </View>
             </Card>
 
@@ -291,7 +346,7 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
             <Pressable
               onPress={() => {
                 resetFilters();
-                setDraft((p) => ({ ...p, verticals: [], attributes: {}, priceTiers: [], minRating: null, openNow: false, openAt: null, maxDistanceMi: null }));
+                setDraft((p) => ({ ...p, verticals: [], categories: [], attributes: {}, priceTiers: [], minRating: null, openNow: false, openAt: null, maxDistanceMi: null }));
               }}
               accessibilityRole="button"
               accessibilityLabel="Clear all filters"

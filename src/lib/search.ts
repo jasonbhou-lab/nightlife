@@ -9,6 +9,7 @@ import type { AttributeValue, FilterState, SortKey, Venue, Vertical } from '@/ty
 
 export const emptyFilters: FilterState = {
   verticals: [],
+  categories: [],
   attributes: {},
   priceTiers: [],
   minRating: null,
@@ -22,6 +23,7 @@ export const emptyFilters: FilterState = {
 export function activeFilterCount(f: FilterState): number {
   return (
     f.verticals.length +
+    f.categories.length +
     Object.keys(f.attributes).length +
     f.priceTiers.length +
     (f.minRating != null ? 1 : 0) +
@@ -115,6 +117,14 @@ export function buildPredicates(f: FilterState, now: Date): Predicate[] {
       key: 'verticals',
       label: f.verticals.length === 1 ? `the ${f.verticals[0]} category` : 'the category selection',
       test: (v) => verticalsOf(v).some((x) => f.verticals.includes(x)),
+    });
+  }
+
+  if (f.categories.length) {
+    out.push({
+      key: 'categories',
+      label: f.categories.length === 1 ? `“${f.categories[0]}”` : 'the cuisine/atmosphere selection',
+      test: (v) => categoriesOf(v).some((c) => f.categories.includes(c)),
     });
   }
 

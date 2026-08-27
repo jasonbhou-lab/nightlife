@@ -592,6 +592,13 @@ export type SortKey =
 
 export type FilterState = {
   verticals: Vertical[];
+  /**
+   * Subcategory values from `taxonomy.ts`'s per-vertical `categories` list —
+   * the venue's own cuisine or theme (Tex-Mex, Speakeasy, Dive Bar, Latin
+   * Club), matched against `primary`/`secondary`. Distinct from `verticals`,
+   * which only picks the five top-level categories.
+   */
+  categories: string[];
   /** Attribute key -> required value. Booleans mean "must be true". */
   attributes: Record<string, AttributeValue>;
   priceTiers: number[];

@@ -96,6 +96,23 @@ reviews' free text and structured occasion tags, and how many of its photos land
 correlated album. A venue with zero evidence does not appear, and every one that does shows
 exactly what convinced it — "Dress code: Dressy · 1 review mentions it," not an unexplained score.
 
+**Cuisine and atmosphere filter** (`src/components/FilterSheet.tsx`, `FilterState.categories`,
+extends F-SEARCH-04). Lets a consumer filter on the venue's own subcategory — Tex-Mex, Speakeasy,
+Dive Bar, Latin Club — which previously only surfaced through free-text search and typeahead, not
+as a discrete filter chip. This exists because of an explicit steer away from a different request:
+the initial ask was a consumer-facing picker for the *race or ethnicity associated with a venue's
+environment*, built from a list of U.S. Census-style ancestry categories. That was declined rather
+than scoped down — a "pick the venue's racial/ethnic environment" filter is a mechanism for
+racially steering customers toward or away from venues, which is exactly what public-accommodation
+law (Title II of the Civil Rights Act, and state equivalents, both of which cover bars,
+restaurants, and nightclubs) prohibits, regardless of neutral framing or good intent on any single
+user's part. What shipped instead describes the venue, never its patrons: culinary tradition,
+music/programming (layered on the existing `genres` attribute, F-SEARCH-04/F-EVENT), and
+atmosphere/theme, all drawn from the taxonomy in `src/data/taxonomy.ts` that already existed for
+every venue. Selecting a vertical narrows which subcategories show, same discipline as every other
+category-aware filter here; deselecting one drops any now-irrelevant picks rather than leaving a
+stale, invisible filter active.
+
 **Bar/Lounge tiebreak** (PRD Open Question 8). Dual-assigned venues filter on their primary
 category, and in Tonight they surface as a Bar before 11 PM and as a Lounge after, since dwell
 rises later. The rule is stated in the UI rather than left implicit.

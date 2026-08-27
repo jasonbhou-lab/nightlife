@@ -131,6 +131,7 @@ export default function SearchScreen() {
       setNlNote(null);
       setActiveVibe(null);
     } else if (key === 'verticals') setFilters({ ...filters, verticals: [] });
+    else if (key === 'categories') setFilters({ ...filters, categories: [] });
     else if (key === 'priceTiers') setFilters({ ...filters, priceTiers: [] });
     else if (key === 'minRating') setFilters({ ...filters, minRating: null });
     else if (key === 'openNow') setFilters({ ...filters, openNow: false });
@@ -148,6 +149,9 @@ export default function SearchScreen() {
     if (filters.query.trim()) out.push({ key: 'query', label: `“${filters.query.trim()}”` });
     if (filters.verticals.length) {
       out.push({ key: 'verticals', label: filters.verticals.map((v) => verticalMeta[v].label).join(', ') });
+    }
+    if (filters.categories.length) {
+      out.push({ key: 'categories', label: filters.categories.join(', ') });
     }
     if (filters.priceTiers.length) {
       out.push({ key: 'priceTiers', label: filters.priceTiers.map((t) => '$'.repeat(t)).join(' ') });
@@ -523,7 +527,7 @@ export default function SearchScreen() {
                     <Chip
                       key={v}
                       label={verticalMeta[v].plural}
-                      onPress={() => setFilters({ ...filters, verticals: [v], attributes: {} })}
+                      onPress={() => setFilters({ ...filters, verticals: [v], attributes: {}, categories: [] })}
                     />
                   ))}
                 </View>
