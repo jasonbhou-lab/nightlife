@@ -912,6 +912,17 @@ export default function VenueProfile() {
               </Pressable>
               <Divider />
               <Pressable
+                onPress={() => router.push(`/venue/messages?venueId=${venue.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel="Manage messages"
+                style={[ui.row, { gap: space.md, minHeight: 44 }]}
+              >
+                <Ionicons name="chatbubbles" size={18} color={theme.accent} />
+                <Text style={[font.body, { color: theme.text, flex: 1 }]}>Manage messages</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+              </Pressable>
+              <Divider />
+              <Pressable
                 onPress={exportData}
                 accessibilityRole="button"
                 accessibilityLabel="Export venue data"

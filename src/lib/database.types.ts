@@ -85,6 +85,8 @@ export type VenueRow = {
   booking_terms: string | null;
   /** F-MSG-01: published response-time metric, shown on the profile and composer. */
   avg_response_minutes: number | null;
+  /** F-MSG-02: sent automatically on the first message in a new thread, if set. */
+  auto_response_text: string | null;
   /** F-PROFILE-11 / F-TRUST-04, both writable only by trust_safety. */
   contribution_frozen: boolean;
   search_text: string | null;
@@ -215,11 +217,21 @@ export type MessageThreadRow = {
   last_message_at: string;
 };
 
-/** `sender` is DB-constrained to 'user' — see the messaging migration header. */
+/** `sender` is DB-constrained to 'user' or 'business' — see
+ * 20260827090000_add_business_messaging.sql for what actually gates a
+ * 'business' row (holding a business role at the thread's venue). */
 export type MessageRow = {
   id: string;
   thread_id: string;
-  sender: 'user';
+  sender: 'user' | 'business';
+  body: string;
+  created_at: string;
+};
+
+export type BusinessReplyTemplateRow = {
+  id: string;
+  venue_id: string;
+  label: string;
   body: string;
   created_at: string;
 };
@@ -403,6 +415,12 @@ export type Database = {
         Row: MessageRow;
         Insert: Insertable<MessageRow, 'id' | 'sender' | 'created_at'>;
         Update: Partial<MessageRow>;
+        Relationships: [];
+      };
+      business_reply_templates: {
+        Row: BusinessReplyTemplateRow;
+        Insert: Insertable<BusinessReplyTemplateRow, 'id' | 'created_at'>;
+        Update: Partial<BusinessReplyTemplateRow>;
         Relationships: [];
       };
       photos: {

@@ -3,13 +3,14 @@ import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import { hasBackend, supabase } from '@/lib/supabase';
 import type {
-  BookingRow, BusinessInviteRow, ContentReportRow, EventRow, ModerationActionRow, PhotoRow,
-  ReviewRow, TableTierRow, VenueOfferRow, VenueRow,
+  BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow, EventRow,
+  MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
+  VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  Booking, BusinessInvite, ClaimableBusinessRole, ContentReport, HappyHourWindow,
-  InvitableBusinessRole, MenuSection, ModerationAction, Photo, PlatformRole, ReportReason, Review,
-  Schedule, Venue, VenueEvent, VenueOffer,
+  Booking, BusinessInvite, BusinessReplyTemplate, ClaimableBusinessRole, ContentReport,
+  HappyHourWindow, InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction,
+  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueEvent, VenueOffer,
 } from '@/types';
 
 /**
@@ -112,6 +113,7 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
     bookingModes: row.booking_modes ?? [],
     bookingTerms: row.booking_terms ?? undefined,
     avgResponseMinutes: row.avg_response_minutes ?? undefined,
+    autoResponseText: row.auto_response_text ?? undefined,
     busyness: Object.fromEntries(
       Object.entries(asRecord(row.busyness)).map(([k, v]) => [Number(k), Number(v)]),
     ),
@@ -195,6 +197,39 @@ function mapBooking(row: BookingRow, guestName?: string): Booking {
     waitlistPosition: row.waitlist_position ?? undefined,
     waitMinutes: row.wait_minutes ?? undefined,
     guestName,
+  };
+}
+
+function mapMessage(row: MessageRow): Message {
+  return {
+    id: row.id,
+    sender: row.sender,
+    text: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+function mapMessageThread(row: MessageThreadRow, messages: Message[]): MessageThread {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    kind: row.kind,
+    subject: row.subject ?? undefined,
+    intake: Object.keys(asRecord(row.intake)).length ? (row.intake as MessageThread['intake']) : undefined,
+    blocked: row.blocked,
+    createdAt: row.created_at,
+    lastMessageAt: row.last_message_at,
+    messages,
+  };
+}
+
+function mapBusinessReplyTemplate(row: BusinessReplyTemplateRow): BusinessReplyTemplate {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    label: row.label,
+    body: row.body,
+    createdAt: row.created_at,
   };
 }
 
@@ -1021,6 +1056,130 @@ export async function updateBookingStatus(input: {
   if (input.waitMinutes != null) patch.wait_minutes = input.waitMinutes;
   if (input.waitlistPosition != null) patch.waitlist_position = input.waitlistPosition;
   const { error } = await supabase.from('bookings').update(patch).eq('id', input.bookingId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ F-MSG-02 */
+
+/**
+ * Fresh messages for one thread, in either direction. Used by the consumer's
+ * own thread screen (a business reply never appears there without this —
+ * see the migration header on 20260827090000_add_business_messaging.sql)
+ * and by the business console reading the same thread.
+ */
+export async function getThreadMessages(threadId: string): Promise<Message[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('thread_id', threadId)
+    .order('created_at', { ascending: true });
+  return (data ?? []).map(mapMessage);
+}
+
+/**
+ * F-MSG-02: a business account replying free text or from a saved template.
+ * The database — not this function — is what actually restricts a
+ * 'business'-sender row to an account holding a business role at the
+ * thread's venue (messages_business_insert).
+ */
+export async function sendBusinessReply(input: {
+  threadId: string;
+  text: string;
+}): Promise<{ ok: true; message: Message } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the reply was not sent.' };
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ thread_id: input.threadId, sender: 'business', body: input.text })
+    .select('*')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, message: mapMessage(data) };
+}
+
+/**
+ * Every thread at a venue this account manages, each with its own messages
+ * already loaded — the business console shows both in one screen, so there
+ * is no separate per-thread fetch. `guestName` is a device-side join
+ * against `profiles`, the same pattern getVenueBookings uses, and absent
+ * (falls back to "Guest") rather than invented when the guest's profile
+ * isn't public.
+ */
+export async function getVenueThreads(venueId: string): Promise<(MessageThread & { guestName?: string })[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data: threadRows } = await supabase
+    .from('message_threads')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('last_message_at', { ascending: false });
+  const threads = threadRows ?? [];
+  if (!threads.length) return [];
+
+  const threadIds = threads.map((t) => t.id);
+  const { data: messageRows } = await supabase
+    .from('messages')
+    .select('*')
+    .in('thread_id', threadIds)
+    .order('created_at', { ascending: true });
+  const messagesByThread: Record<string, Message[]> = {};
+  for (const row of messageRows ?? []) (messagesByThread[row.thread_id] ||= []).push(mapMessage(row));
+
+  const userIds = Array.from(new Set(threads.map((t) => t.user_id)));
+  const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', userIds);
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+
+  return threads.map((row) => ({
+    ...mapMessageThread(row, messagesByThread[row.id] ?? []),
+    guestName: nameById[row.user_id],
+  }));
+}
+
+/** F-MSG-02: saved canned replies for a venue this account manages. */
+export async function getBusinessReplyTemplates(venueId: string): Promise<BusinessReplyTemplate[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('business_reply_templates')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: true });
+  return (data ?? []).map(mapBusinessReplyTemplate);
+}
+
+export async function createBusinessReplyTemplate(input: {
+  venueId: string;
+  label: string;
+  body: string;
+}): Promise<{ ok: true; template: BusinessReplyTemplate } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the template was not saved.' };
+  const { data, error } = await supabase
+    .from('business_reply_templates')
+    .insert({ venue_id: input.venueId, label: input.label, body: input.body })
+    .select('*')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, template: mapBusinessReplyTemplate(data) };
+}
+
+export async function deleteBusinessReplyTemplate(templateId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to remove.' };
+  const { error } = await supabase.from('business_reply_templates').delete().eq('id', templateId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-MSG-02: the venue's own configured auto-response, sent once by the
+ * database itself on the first message in a new thread (messages_auto_respond).
+ * `text` null clears it. The database restricts this to a business account
+ * managing the venue, the same as every other listing write here.
+ */
+export async function setVenueAutoResponse(input: {
+  venueId: string;
+  text: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was changed.' };
+  const { error } = await supabase.from('venues').update({ auto_response_text: input.text }).eq('id', input.venueId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

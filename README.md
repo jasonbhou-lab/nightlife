@@ -36,7 +36,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Social | F-SOCIAL-01 through 07 |
 | Booking | F-BOOK-01 through 04, 06, 09, 09a, 10, 11 |
 | Events | F-EVENT-01 through 06 |
-| Messaging | F-MSG-01, 03, 04 |
+| Messaging | F-MSG-01, 02 (scoped), 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
 | Business portal | F-BIZ-01, 03, 04, 05, 07, 09, 11, 13, 15 (each scoped down — see below) |
 | Trust & Safety | F-TRUST-01, 04, 06, 08 (scoped — see below) |
@@ -101,13 +101,36 @@ category, and in Tonight they surface as a Bar before 11 PM and as a Lounge afte
 rises later. The rule is stated in the UI rather than left implicit.
 
 **Messaging** (`app/messages/`). Consumer-to-business only, per F-MSG-05's deferral of
-consumer-to-consumer messaging. There is no business portal in this build, so nothing here
-invents a reply "from the venue" — the venue side of the conversation is real or it does not
-appear. What is real: the venue's published response time (F-MSG-01, `venues.avg_response_minutes`),
-a structured intake form for private-event and buyout requests (F-MSG-03), and abuse controls
-(F-MSG-04) — a client-side rate-limit courtesy backed by a database trigger that is the actual
-control, plus block and report. Every message thread is verified-account-only (R3), the same gate
-as booking, since the PRD's permission matrix requires it.
+consumer-to-consumer messaging. The venue side of a conversation is real or it does not appear —
+that discipline predates F-MSG-02 (see below) and still holds, it just means something different
+now that a venue side can actually exist. What is real: the venue's published response time
+(F-MSG-01, `venues.avg_response_minutes`), a structured intake form for private-event and buyout
+requests (F-MSG-03), and abuse controls (F-MSG-04) — a client-side rate-limit courtesy backed by a
+database trigger that is the actual control, plus block and report. Every message thread is
+verified-account-only (R3) on the guest's side, the same gate as booking, since the PRD's
+permission matrix requires it.
+
+**Business replies, quick-reply templates, and auto-response** (`app/venue/messages.tsx`,
+F-MSG-02, scoped). The original messaging migration locked `messages.sender` to `'user'` at the
+schema level, with its own header explaining why: there was no business portal, so there was no
+authenticated party on the venue side who could write a reply, and inventing one would have meant
+modelling a conversation that never happened. There is a real business portal now, so that
+constraint was stale, not principled — `sender` is `'user' | 'business'`, and a `'business'` row
+requires holding a business role at the thread's venue, checked in the database the same way every
+other business write in this app is. Two things sit on top of that real capability: quick-reply
+templates (`business_reply_templates`, tap-to-insert into the composer, no keyword matching or
+rules engine) and a single auto-response text sent once, synchronously, on the first message in a
+new thread — not a "no human replied within N minutes" system, which would need a scheduler this
+build doesn't have.
+
+Building this surfaced a second stale assumption from the same original migration: the consumer's
+own thread screen (`app/messages/[id].tsx`) never re-fetched anything from the backend after a
+thread was created, which was entirely reasonable when nothing else could ever write into it. It
+stops being reasonable the moment a business can reply, so this build added a real
+refetch-on-open (`AppProvider.refreshThread`) — not a realtime subscription, matching the
+fetch-on-mount pattern the moderation queue and bookings console already use. A business's reply
+replaces local thread state with server truth rather than merging into it, which is what avoids
+ever double-showing a message the consumer sent this session under its own temporary local id.
 
 **Following, activity, and collaborative collections** (`app/community/`, F-SOCIAL-02, 04, 05).
 "Follow users" has no real directory to search, because this build has no multi-user backend —
@@ -355,8 +378,6 @@ best-effort afterward.
   *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer
   Alert/contribution-freeze controls, not the full moderation console (no automated pre-screening,
   coordinated-behavior detection, appeal flow, or transparency reporting).
-- **Messaging quick-reply templates and auto-responses** (F-MSG-02). These are a venue-side
-  configuration and there is no business portal to configure them from.
 - **Ordering and delivery** (F-ORDER). Menus render with availability and the alcohol-delivery
   rule is stated; checkout is not built.
 - **Automated photo classification into albums** (F-MEDIA-02). Album is a real, stored field —
@@ -429,6 +450,9 @@ presentation only. So:
 - A business account can see and move a booking through its lifecycle at a venue it manages, but
   only through `status`, `wait_minutes`, and `waitlist_position` — the guest's own submission
   (date, time, party size, deposit, notes) is off limits through that door (F-BIZ-11).
+- A `messages` row can only ever carry `sender = 'user'` from the account that owns the thread, or
+  `sender = 'business'` from an account holding a business role at the thread's venue — never the
+  other way around, and never both at once from the same account (F-MSG-02).
 - A message thread's `sender` column is constrained to `'user'` at the schema level, and a rate
   limit (5 seconds per thread, 40 per account per hour) is enforced by trigger, not just by the
   composer disabling Send (F-MSG-04, NFR-11).

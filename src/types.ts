@@ -345,6 +345,8 @@ export type Venue = {
   subRatingAverages: Partial<Record<SubRatingKey, number>>;
   /** F-MSG-01: published response-time metric. Absent means not published. */
   avgResponseMinutes?: number;
+  /** F-MSG-02: sent automatically on the first message in a new thread, if set. */
+  autoResponseText?: string;
 };
 
 /* --------------------------------------------------------------- messaging */
@@ -352,17 +354,36 @@ export type Venue = {
 /**
  * F-MSG. Consumer-to-business only (F-MSG-05 defers consumer-to-consumer).
  *
- * `sender` is always 'user': there is no business portal in this build, so
- * there is no authenticated party on the venue side who could write a reply.
- * The database enforces this (messages.sender is constrained to 'user'), so
- * the type does the same rather than modelling a reply that can never exist.
+ * `sender` was 'user' only for most of this build's life: there was no
+ * business portal, so there was no authenticated party on the venue side who
+ * could write a reply, and the database enforced that with a column check.
+ * F-MSG-02 is what changed it — a business account holding a role at the
+ * thread's venue can now reply, either free text or from a saved template
+ * (see BusinessReplyTemplate below), and the database enforces *that*
+ * instead: a 'business'-sender row requires holding a business role at the
+ * thread's venue, checked the same way every other business write in this
+ * app is (see 20260827090000_add_business_messaging.sql).
  */
 export type MessageThreadKind = 'general' | 'quote_request';
 
 export type Message = {
   id: string;
-  sender: 'user';
+  sender: 'user' | 'business';
   text: string;
+  createdAt: string;
+};
+
+/**
+ * F-MSG-02, scoped: a saved canned reply a business account can tap to
+ * insert into the composer rather than typing the same answer again. Not a
+ * rules engine — no keyword matching, no scheduling beyond the one
+ * auto-response text on Venue.autoResponseText.
+ */
+export type BusinessReplyTemplate = {
+  id: string;
+  venueId: string;
+  label: string;
+  body: string;
   createdAt: string;
 };
 

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 
 import {
@@ -19,21 +19,27 @@ import type { QuoteIntake } from '@/types';
  * place to see the conversation or send a follow-up. This screen is that
  * place, for every vertical, not just the cigar-lounge inquiry form.
  *
- * There is no business portal in this build, so nothing here shows a reply
- * "from the venue" — that would be inventing a conversation that never
- * happened. What is real and shown instead: the venue's published response
- * time (F-MSG-01), and the fact that the message actually sent.
+ * F-MSG-02 gave a business account a real reply path into this same
+ * thread — see 20260827090000_add_business_messaging.sql. A reply never
+ * shows up here on its own, though: this screen only ever trusted local
+ * device state before, which was fine when nothing else could write into a
+ * thread. `refreshThread` on mount is what pulls a business's reply (or
+ * their auto-response) down to this device.
  */
 export default function ThreadScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { now, threads, sendThreadMessage, blockThread } = useApp();
+  const { now, threads, sendThreadMessage, blockThread, refreshThread } = useApp();
   const { getVenue } = useCatalogue();
   const [text, setText] = useState('');
 
   const thread = threads.find((t) => t.id === id);
   const venue = thread ? getVenue(thread.venueId) : undefined;
+
+  useEffect(() => {
+    if (id) refreshThread(id);
+  }, [id]);
 
   const responseNote = useMemo(() => {
     if (!venue?.avgResponseMinutes) return 'This venue has not published a response time.';
@@ -137,23 +143,36 @@ export default function ThreadScreen() {
                 </View>
               </Card>
             ) : (
-              thread.messages.map((m) => (
-                <View
-                  key={m.id}
-                  style={{
-                    alignSelf: 'flex-end',
-                    maxWidth: '84%',
-                    backgroundColor: theme.accent,
-                    borderRadius: radius.md,
-                    padding: space.md,
-                  }}
-                >
-                  <Text style={[font.body, { color: theme.accentText }]}>{m.text}</Text>
-                  <Text style={[font.small, { color: theme.accentText, opacity: 0.75, marginTop: 4 }]}>
-                    {relativeDate(m.createdAt.slice(0, 10), now)}
-                  </Text>
-                </View>
-              ))
+              thread.messages.map((m) => {
+                const fromVenue = m.sender === 'business';
+                return (
+                  <View
+                    key={m.id}
+                    style={{
+                      alignSelf: fromVenue ? 'flex-start' : 'flex-end',
+                      maxWidth: '84%',
+                      backgroundColor: fromVenue ? theme.cardMuted : theme.accent,
+                      borderRadius: radius.md,
+                      padding: space.md,
+                    }}
+                  >
+                    {fromVenue ? (
+                      <Text style={[font.small, { color: theme.textFaint, marginBottom: 2 }]}>
+                        {venue.name}
+                      </Text>
+                    ) : null}
+                    <Text style={[font.body, { color: fromVenue ? theme.text : theme.accentText }]}>{m.text}</Text>
+                    <Text
+                      style={[
+                        font.small,
+                        { color: fromVenue ? theme.textFaint : theme.accentText, opacity: fromVenue ? 1 : 0.75, marginTop: 4 },
+                      ]}
+                    >
+                      {relativeDate(m.createdAt.slice(0, 10), now)}
+                    </Text>
+                  </View>
+                );
+              })
             )}
           </View>
 

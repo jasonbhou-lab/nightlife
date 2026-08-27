@@ -5,9 +5,10 @@ import React, {
 import { useColorScheme } from 'react-native';
 
 import {
-  cancelBookingRemote, createMessageThread, getAuthSnapshot, getManagedVenueIds, getPlatformRoles,
-  onAuthSignedOut, sendMessage as sendMessageRemote, sendSignInCode as sendSignInCodeRemote,
-  signOutRemote, verifySignInCode as verifySignInCodeRemote, type AuthProfile,
+  cancelBookingRemote, createMessageThread, getAuthSnapshot, getManagedVenueIds,
+  getPlatformRoles, getThreadMessages, onAuthSignedOut, sendMessage as sendMessageRemote,
+  sendSignInCode as sendSignInCodeRemote, signOutRemote,
+  verifySignInCode as verifySignInCodeRemote, type AuthProfile,
 } from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
 import { hasBackend } from '@/lib/supabase';
@@ -167,6 +168,9 @@ type Ctx = {
     intake?: QuoteIntake,
   ) => { ok: true } | { ok: false; error: string };
   blockThread: (threadId: string) => void;
+  /** F-MSG-02: pulls fresh messages for a thread (a business reply otherwise
+   * never appears). Fetch-on-open, not realtime — see repository.getThreadMessages. */
+  refreshThread: (threadId: string) => Promise<void>;
 
   drafts: Record<string, ReviewDraft>;
   saveDraft: (d: ReviewDraft) => void;
@@ -648,6 +652,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [threads, writeThreads],
   );
 
+  /**
+   * F-MSG-02: pulls fresh messages for one thread from the backend and
+   * replaces the local copy with them. Before a business account could
+   * reply, this thread screen had nothing else to fetch — the thread's own
+   * creation was the only server round trip that ever happened, so trusting
+   * local state forever was reasonable. It stops being reasonable the
+   * moment a business can write into the same thread: server truth is what
+   * this replaces local state with, not a merge, so a message sent this
+   * session (still on its local `m-<timestamp>` id) is safely overwritten
+   * with the server's real row rather than risking a duplicate. Deliberately
+   * fetch-on-open, not a realtime subscription — see the migration header on
+   * 20260827090000_add_business_messaging.sql for why.
+   */
+  const refreshThread = useCallback(
+    async (threadId: string) => {
+      if (!isRemoteId(threadId)) return;
+      const messages = await getThreadMessages(threadId);
+      if (!messages.length) return;
+      writeThreads(
+        threads.map((t) =>
+          t.id === threadId
+            ? { ...t, messages, lastMessageAt: messages[messages.length - 1].createdAt }
+            : t,
+        ),
+      );
+    },
+    [threads, writeThreads],
+  );
+
   /* -------------------------------------------------------------- follows */
   const writeFollows = useCallback(
     (next: Follows) => {
@@ -785,6 +818,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       startThread,
       sendThreadMessage,
       blockThread,
+      refreshThread,
       drafts,
       saveDraft,
       clearDraft,
@@ -802,7 +836,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
       follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,
       checkIns, addCheckIn, bookings, addBooking, cancelBooking,
-      threads, startThread, sendThreadMessage, blockThread, drafts,
+      threads, startThread, sendThreadMessage, blockThread, refreshThread, drafts,
       saveDraft, clearDraft, prefs, setPrefs, now, clockOverride,
     ],
   );
