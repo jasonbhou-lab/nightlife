@@ -5,12 +5,13 @@ import { hasBackend, supabase } from '@/lib/supabase';
 import type {
   BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow, EventRow,
   MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
-  VenueOfferRow, VenueRow,
+  VenueEventRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
   Booking, BusinessInvite, BusinessReplyTemplate, ClaimableBusinessRole, ContentReport,
   HappyHourWindow, InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction,
-  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueEvent, VenueOffer,
+  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueEvent,
+  VenueEventKind, VenueOffer,
 } from '@/types';
 
 /**
@@ -254,6 +255,15 @@ function mapModerationAction(row: ModerationActionRow): ModerationAction {
     reportId: row.report_id ?? undefined,
     venueId: row.venue_id ?? undefined,
     note: row.note ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function mapVenueEvent(row: VenueEventRow): VenueAnalyticsEvent {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    kind: row.kind,
     createdAt: row.created_at,
   };
 }
@@ -1065,6 +1075,38 @@ export async function getModerationHistory(): Promise<ModerationAction[]> {
  * device-side join against `profiles`, and is absent when the guest's
  * profile isn't public — this never fabricates a name.
  */
+/**
+ * F-BIZ-08: log a single profile view or click. Fire-and-forget by design —
+ * an analytics write should never block or break the screen a guest is
+ * actually trying to use, so failures (including "no backend configured")
+ * are swallowed rather than surfaced. See the migration header on
+ * 20260827130000_add_venue_analytics.sql for why no actor is captured.
+ */
+export function logVenueEvent(venueId: string, kind: VenueEventKind): void {
+  if (!hasBackend || !supabase) return;
+  supabase
+    .from('venue_events')
+    .insert({ venue_id: venueId, kind })
+    .then(() => {}, () => {});
+}
+
+/**
+ * F-BIZ-08: a business account's own raw event log for a venue it manages —
+ * RLS is what actually restricts this to that account (venue_events_business_read).
+ * Aggregation (views by day, clicks by kind, traffic by daypart) happens on
+ * the device, in src/lib/analytics.ts, the same split ratings.ts already
+ * uses for reviews.
+ */
+export async function getVenueEvents(venueId: string): Promise<VenueAnalyticsEvent[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('venue_events')
+    .select('*')
+    .eq('venue_id', venueId)
+    .order('created_at', { ascending: false });
+  return (data ?? []).map(mapVenueEvent);
+}
+
 export async function getVenueBookings(venueId: string): Promise<Booking[]> {
   if (!hasBackend || !supabase) return [];
   const { data } = await supabase

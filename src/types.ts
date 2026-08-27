@@ -396,6 +396,28 @@ export type BusinessReplyTemplate = {
   createdAt: string;
 };
 
+/* --------------------------------------------------------------- analytics */
+
+/**
+ * F-BIZ-08, scoped: a single logged view or click on a venue's profile.
+ * No actor is captured — see the migration header on
+ * 20260827130000_add_venue_analytics.sql for why. `click_book` covers every
+ * booking intent `runAction` routes to `/book/[id]` (reserve, table
+ * service, bar hold, waitlist, membership, guest list) — the PRD's five
+ * booking modes don't reduce to one button in this app's actual UI, so one
+ * event kind for all of them is the honest mapping to the PRD's "reserve"
+ * action type. There is no `click_website` (no website link exists
+ * anywhere in this app yet) or `click_order` (F-ORDER stays deferred).
+ */
+export type VenueEventKind = 'view' | 'click_call' | 'click_directions' | 'click_book';
+
+export type VenueAnalyticsEvent = {
+  id: string;
+  venueId: string;
+  kind: VenueEventKind;
+  createdAt: string;
+};
+
 /** F-MSG-03: structured intake for a private event, buyout, or large party. */
 export type QuoteIntake = {
   date?: string;

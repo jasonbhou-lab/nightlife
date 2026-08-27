@@ -41,6 +41,7 @@ export type ModerationActionKindEnum =
   | 'report_dismissed' | 'report_escalated' | 'review_removed' | 'review_restored'
   | 'consumer_alert_applied' | 'consumer_alert_cleared'
   | 'contribution_frozen' | 'contribution_unfrozen';
+export type VenueEventKindEnum = 'view' | 'click_call' | 'click_directions' | 'click_book';
 
 export type VenueRow = {
   id: string;
@@ -315,6 +316,13 @@ export type ModerationActionRow = {
   created_at: string;
 };
 
+export type VenueEventRow = {
+  id: string;
+  venue_id: string;
+  kind: VenueEventKindEnum;
+  created_at: string;
+};
+
 /** Insert shapes: server-defaulted and server-maintained columns are omitted. */
 type Insertable<T, Optional extends keyof T> = Omit<T, Optional> & Partial<Pick<T, Optional>>;
 
@@ -458,6 +466,12 @@ export type Database = {
         Update: Partial<ModerationActionRow>;
         Relationships: [];
       };
+      venue_events: {
+        Row: VenueEventRow;
+        Insert: Insertable<VenueEventRow, 'id' | 'created_at'>;
+        Update: Partial<VenueEventRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -474,6 +488,7 @@ export type Database = {
       report_reason: ReportReasonEnum;
       report_status: ReportStatusEnum;
       moderation_action_kind: ModerationActionKindEnum;
+      venue_event_kind: VenueEventKindEnum;
     };
     CompositeTypes: Record<string, never>;
   };

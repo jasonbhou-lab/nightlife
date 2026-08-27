@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
 
 import { AttributePanel } from '@/components/AttributePanel';
@@ -13,7 +13,9 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
-import { requestPhotoRemoval, setConsumerAlert, setContributionFrozen } from '@/data/repository';
+import {
+  logVenueEvent, requestPhotoRemoval, setConsumerAlert, setContributionFrozen,
+} from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { exportVenueData } from '@/lib/export';
@@ -45,6 +47,10 @@ export default function VenueProfile() {
   const [tsBusy, setTsBusy] = useState(false);
 
   const venue = getVenue(id);
+
+  useEffect(() => {
+    if (venue) logVenueEvent(venue.id, 'view');
+  }, [venue?.id]);
 
   if (!venue) {
     return (
@@ -123,14 +129,17 @@ export default function VenueProfile() {
           );
           return;
         }
+        logVenueEvent(venue.id, 'click_book');
         router.push({ pathname: `/book/${venue.id}`, params: { intent: key } });
         return;
       case 'directions':
+        logVenueEvent(venue.id, 'click_directions');
         Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(`${venue.name} ${venue.address}`)}`).catch(
           () => Alert.alert('Could not open maps', 'No maps application is available on this device.'),
         );
         return;
       case 'call':
+        logVenueEvent(venue.id, 'click_call');
         Linking.openURL(`tel:${venue.phone.replace(/[^0-9]/g, '')}`).catch(() =>
           Alert.alert('Could not place the call', `Dial ${venue.phone} manually.`),
         );
@@ -963,6 +972,17 @@ export default function VenueProfile() {
                     <Text style={[font.micro, { color: theme.onGround }]}>{reviewsNeedingResponse}</Text>
                   </View>
                 ) : null}
+                <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+              </Pressable>
+              <Divider />
+              <Pressable
+                onPress={() => router.push(`/venue/analytics?venueId=${venue.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel="Manage analytics"
+                style={[ui.row, { gap: space.md, minHeight: 44 }]}
+              >
+                <Ionicons name="bar-chart" size={18} color={theme.accent} />
+                <Text style={[font.body, { color: theme.text, flex: 1 }]}>Analytics</Text>
                 <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
               </Pressable>
               <Divider />

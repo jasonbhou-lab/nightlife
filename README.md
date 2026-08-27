@@ -211,6 +211,25 @@ notification behind this — nothing in this build has one (see F-MSG-01/02) —
 what it already means for the moderation queue and the bookings console: a number in the business
 portal, not an out-of-band ping.
 
+**Analytics dashboard** (`app/venue/analytics.tsx`, F-BIZ-08, scoped). Profile views, click-throughs
+by action, traffic by daypart, a rating trend, and a category/neighborhood rating benchmark — all
+from one new `venue_events` log plus data the app already has. Cut from the full requirement: search
+impressions and the search terms driving them, which would mean instrumenting the discovery surfaces
+(home feed, filter results, "Tonight") — a materially larger, more invasive change than this
+venue-detail-page slice, and a reasonable next slice on its own rather than folded in here; a real
+conversion funnel, since there is no impression stage to fund one without the above; click-throughs
+for a website link (none is rendered anywhere in this app yet — a separate, pre-existing gap, not
+something this quietly fixes on the side) or for ordering (F-ORDER stays deferred); and view-count
+competitor benchmarking, which would need a `SECURITY DEFINER` aggregate crossing into other venues'
+private event data — a new trust boundary not worth adding for a first version when a rating
+benchmark, computed from data the `venues` table already makes public, satisfies the same PRD line
+honestly. `venue_events` captures no actor at all — not a user id, not a device fingerprint, not even
+for a signed-in visitor — so a business account refreshing its own listing inflates its own view
+count; that is a known, accepted limitation, the same honesty this build already applies to other
+simple counters, not a hidden one. The rating benchmark only shows once at least three other venues
+share the same primary category and neighborhood — below that floor, a "median" is really just one
+or two competitors' actual ratings with extra steps, and the PRD calls for this to be anonymized.
+
 **Hours and happy hour editor** (`app/hours/edit.tsx`, F-BIZ-04, scoped). Dropped from the full
 requirement: bulk/multi-location editing (F-BIZ-14 is out of scope, so there's nowhere to
 bulk-apply to) and temporary closure scheduling (`closure_state`/`closure_note` are Trust &
@@ -386,7 +405,7 @@ Postgres happened to return, not a real sort.
 - **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
   the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
-  claimed/unclaimed states, closure and successor handling. Ten exceptions are real, scoped-down
+  claimed/unclaimed states, closure and successor handling. Twelve exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
   (self-attestation, not the PRD's actual verification paths), F-BIZ-03's tagline/about editor
   (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
@@ -394,13 +413,16 @@ Postgres happened to return, not a real sort.
   editor (no CSV/PDF/photo import), F-BIZ-06's cover photo and reorder (owner-credited photos only,
   same as F-MEDIA-06 draws it), F-BIZ-07's review response composer and threshold-based alerting (no
   sentiment summary or keyword themes, and no push notification behind the alert — see F-MSG-01/02),
-  F-BIZ-09's offers (self-published only — no budget, targeting, or
+  F-BIZ-08's analytics dashboard (profile views, click-throughs, daypart traffic, a rating trend, and
+  a rating-only competitor benchmark — no search impressions, funnel, website/order click-through, or
+  view-count benchmarking), F-BIZ-09's offers (self-published only — no budget, targeting, or
   ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-11's reservation and waitlist
   console (no floor map, real-time table-tier status, or staff assignment), F-BIZ-13's
   invite-a-manager flow (manager/staff only, no access audit log), and F-BIZ-15's own-data export
-  (reviews and media, not analytics — there is none to export — and not the team roster).
-  Everything else — the typed attributes themselves beyond a cover flag, analytics, advertising,
-  and the rest of F-BIZ-02 through 15 — has no dashboard here at all. F-TRUST is a partial exception of
+  (reviews and media, not the new analytics — that lives in its own dashboard, not the export file —
+  and not the team roster). Everything else — the typed attributes themselves beyond a cover flag,
+  advertising, and the rest of F-BIZ-02, 10, 12, and 14 — has no dashboard here at all. F-TRUST is a
+  partial exception of
   its own now — see
   *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer
   Alert/contribution-freeze controls, not the full moderation console (no automated pre-screening,
@@ -493,6 +515,11 @@ presentation only. So:
 - A business account can set `review_alert_threshold` on its own venue and nothing else through
   that write — the check constraint also rejects a value outside 1–5 at the row level, not just in
   the chip picker the client happens to offer (F-BIZ-07).
+- Any client can log a `venue_events` row for a real venue (an insert-only, no-actor-captured log —
+  a foreign key is what keeps `venue_id` honest), but only a `business_roles` holder for that venue
+  can read its own venue's raw events back; a different venue's events are invisible even to a
+  business account, and the client-side aggregation in `src/lib/analytics.ts` never sees them to
+  begin with (F-BIZ-08).
 
 One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
 enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus
