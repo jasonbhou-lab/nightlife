@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 
 import { BackendBanner } from '@/components/BackendBanner';
 import { FilterSheet } from '@/components/FilterSheet';
@@ -214,7 +214,20 @@ export default function SearchScreen() {
             <Text style={[font.meta, { color: theme.text, marginLeft: space.sm, flex: 1 }]}>
               Downtown Houston, TX (detected)
             </Text>
-            <Text style={[font.small, { color: theme.accent }]}>Change</Text>
+            <Pressable
+              onPress={() =>
+                Alert.alert(
+                  'Location is fixed for this prototype',
+                  'There is no real device location or manual location search wired up — every distance and ' +
+                    '"open now" result here is computed against Downtown Houston.',
+                )
+              }
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Change location"
+            >
+              <Text style={[font.small, { color: theme.accent }]}>Change</Text>
+            </Pressable>
           </View>
         </Card>
 

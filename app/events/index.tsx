@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, Text, View } from 'react-native';
 
 import {
   Body, Button, Card, Chip, EmptyState, gutter, IconBadge, Label, Screen, ScreenHeader,
@@ -236,7 +236,9 @@ export default function EventsScreen() {
                       icon="ticket"
                       variant="ghost"
                       onPress={() =>
-                        router.push(`/venue/${e.venueId}`)
+                        Linking.openURL(e.ticketUrl!).catch(() =>
+                          Alert.alert('Could not open that link', 'No browser is available on this device.'),
+                        )
                       }
                     />
                   ) : null}
