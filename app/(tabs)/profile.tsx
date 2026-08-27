@@ -139,8 +139,15 @@ export default function ProfileScreen() {
                   {i > 0 ? <Divider /> : null}
                   <View style={{ padding: space.lg }}>
                     <Text style={[font.body, { color: theme.text }]}>
-                      {venue?.name ?? 'A venue'} invited you as {inv.role === 'manager' ? 'manager' : 'staff'}
+                      {inv.role === 'owner'
+                        ? `${venue?.name ?? 'A venue'} wants to transfer ownership to you`
+                        : `${venue?.name ?? 'A venue'} invited you as ${inv.role === 'manager' ? 'manager' : 'staff'}`}
                     </Text>
+                    {inv.role === 'owner' ? (
+                      <Body dim style={{ marginTop: 2 }}>
+                        Accepting replaces the current owner — you become the only owner.
+                      </Body>
+                    ) : null}
                     <View style={[ui.row, { gap: space.sm, marginTop: space.md }]}>
                       <Button
                         label="Accept"

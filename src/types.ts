@@ -168,11 +168,18 @@ export type ClaimableBusinessRole = 'owner' | 'manager';
  */
 export type InvitableBusinessRole = 'manager' | 'staff';
 
+/**
+ * F-BIZ-02: `role` can also be 'owner' here — not a normal invite, an
+ * ownership-transfer request from the current owner (see
+ * repository.transferOwnership and 20260828120000_add_ownership_transfer_and_dispute.sql).
+ * Accepting one replaces the sender's own owner row instead of adding a
+ * second owner alongside it.
+ */
 export type BusinessInvite = {
   id: string;
   venueId: string;
   email: string;
-  role: InvitableBusinessRole;
+  role: InvitableBusinessRole | 'owner';
   invitedBy: string;
   createdAt: string;
   acceptedAt?: string;
@@ -187,6 +194,14 @@ export type VenueClaimStatus = 'pending' | 'approved' | 'rejected';
  * `claimantName` is only ever populated for the admin queue (a device-side
  * join against `profiles`, the same convention Booking.guestName uses) —
  * the claimant reading their own claim already knows who they are.
+ *
+ * F-BIZ-02: the same row also carries a dispute against an already-claimed
+ * venue — `evidence` is what distinguishes the two client-side (the
+ * database enforces it as required, non-empty, exactly when the venue was
+ * already claimed at submission time; see
+ * 20260828120000_add_ownership_transfer_and_dispute.sql). Approving a
+ * dispute replaces every business_roles row at the venue; approving a
+ * fresh claim just creates one.
  */
 export type VenueClaim = {
   id: string;
@@ -196,6 +211,7 @@ export type VenueClaim = {
   role: ClaimableBusinessRole;
   status: VenueClaimStatus;
   note?: string;
+  evidence?: string;
   createdAt: string;
   decidedAt?: string;
 };

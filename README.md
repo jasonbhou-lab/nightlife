@@ -171,9 +171,8 @@ instantly gain control of any unclaimed listing was too permissive for what it a
 (booking, messaging, and review-management tools on someone else's business). `venues.verified` is
 still deliberately never touched by this path — it stays false, which the venue profile already
 renders as "Claimed and unverified owner," so the self-attested state is not a broken one even
-once approved. Only one claim can be pending on a venue at a time (a partial unique index, not a
-client-side check); a rejected claim frees the venue up for another attempt, and ownership
-transfer and disputes for an *already-claimed* venue (F-BIZ-02) are still out of scope.
+once approved. Only one claim or dispute can be pending on a venue at a time (a partial unique
+index, not a client-side check); a rejected one frees the venue up for another attempt.
 
 **Venue claim approval** (`app/admin/claims.tsx`, `app/(tabs)/profile.tsx`'s entry card). A new
 `admin` platform role (`20260828100000_add_admin_platform_role.sql`) — distinct from moderator and
@@ -197,6 +196,28 @@ the insert already holding a business role at the venue, true for the original s
 for invite acceptance, false for an admin approving *someone else's* claim — so approval silently
 failed to ever flip `claimed` on the first pass. Fixed with an explicit, narrow bypass flag rather
 than loosening the actor check (see the header on `20260828100200_fix_claim_approval_venue_write.sql`).
+
+**Ownership transfer and dispute** (`app/claim/new.tsx`, `app/claim/invite.tsx`, F-BIZ-02, scoped).
+No defined SLA — the same reasoning every other SLA in this PRD has been cut for: there is no
+notification/timer infrastructure to enforce one against, only a queue a human has to look at.
+The PRD pairs two different actions under one requirement, and this build treats them
+differently on purpose: **transfer** is cooperative — a current owner hands the venue to another
+account through the same `business_invites` mechanism F-BIZ-13 already uses for staff and
+managers, extended to allow `role = 'owner'` only when the sender already holds owner at that
+venue. Accepting a transfer invite (the same "pending invite" card on Profile every other invite
+uses) replaces the sender's own owner row rather than adding a second owner alongside it, but
+leaves the outgoing owner's existing manager/staff invites untouched — nothing about a cooperative
+handoff suggests the existing team is illegitimate. **Dispute** is adversarial — someone who is
+*not* the current claimant contests an already-claimed venue, through the exact same
+`venue_claims` table and admin queue a fresh claim uses, with evidence required (the database
+enforces non-empty evidence exactly when the venue is already claimed, not this screen). Approving
+a dispute is different from approving a fresh claim in one deliberate way:
+`venue_claims_apply_decision()` checks whether the venue is *currently* claimed at decision time
+and, if so, clears every existing `business_roles` row at the venue before installing the new
+claimant — a dispute being approved means an admin decided the prior claim wasn't legitimate, so
+nothing about who they'd invited should be assumed legitimate either. A venue's own detail page
+only ever shows one of the two entry points, never both: "Claim this listing" when unclaimed,
+"Dispute this claim" when claimed and this account doesn't already manage it.
 
 **Real Supabase Auth** (`app/auth.tsx`, `src/data/repository.ts`). Every backend-write function in
 this app — `publishReview`, `saveBooking`, `createMessageThread`, `uploadPhoto`, `submitVenueClaim` —
@@ -456,10 +477,12 @@ Postgres happened to return, not a real sort.
 - **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
   the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
-  claimed/unclaimed states, closure and successor handling. Twelve exceptions are real, scoped-down
+  claimed/unclaimed states, closure and successor handling. Fourteen exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
   (self-attestation gated behind admin approval, not the PRD's actual multi-path verification),
-  F-BIZ-03's tagline/about editor
+  F-BIZ-02's ownership transfer (cooperative, via invite) and dispute (adversarial, via the same
+  admin queue as a fresh claim, evidence required) — no defined SLA, either, same reasoning as
+  F-BIZ-01, F-BIZ-03's tagline/about editor
   (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-06's cover photo and reorder (owner-credited photos only,
@@ -473,7 +496,7 @@ Postgres happened to return, not a real sort.
   invite-a-manager flow (manager/staff only, no access audit log), and F-BIZ-15's own-data export
   (reviews and media, not the new analytics — that lives in its own dashboard, not the export file —
   and not the team roster). Everything else — the typed attributes themselves beyond a cover flag,
-  advertising, and the rest of F-BIZ-02, 10, 12, and 14 — has no dashboard here at all. F-TRUST is a
+  advertising, and the rest of F-BIZ-10, 12, and 14 — has no dashboard here at all. F-TRUST is a
   partial exception of
   its own now — see
   *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer
@@ -579,6 +602,12 @@ presentation only. So:
   left for a fresh claim at all; the only doors onto it are accepting a real invite (checked against
   an actual, unconsumed `business_invites` row) and the claim-approval trigger, which runs as the
   system, not as the admin who triggered it (F-BIZ-01).
+- A venue claim against an *already-claimed* venue is only accepted with non-empty `evidence` — a
+  `WITH CHECK` on the insert, not a client-side form validation, so there is no way to submit a
+  bare dispute even by calling the table directly. An owner-transfer invite (`role = 'owner'` in
+  `business_invites`) can only be sent by an account that already holds `owner` at that venue, and
+  accepting one deletes the sender's own owner row in the same trigger that inserts the new one —
+  there is no window where two accounts hold owner at once (F-BIZ-02).
 
 One thing deliberately *not* a table constraint: the 60-character floor on review text. It is
 enforced by trigger on client inserts instead, because as a `CHECK` it would make the corpus

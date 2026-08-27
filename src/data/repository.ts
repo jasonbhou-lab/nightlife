@@ -266,6 +266,7 @@ function mapVenueClaim(row: VenueClaimRow, claimantName?: string): VenueClaim {
     role: row.role as ClaimableBusinessRole,
     status: row.status,
     note: row.note ?? undefined,
+    evidence: row.evidence ?? undefined,
     createdAt: row.created_at,
     decidedAt: row.decided_at ?? undefined,
   };
@@ -761,10 +762,19 @@ export async function reorderOwnerPhotos(orderedPhotoIds: string[]): Promise<{ o
  * verification, either way. The database rejects the insert outright if the
  * venue is already claimed, or if another claim for it is already pending,
  * both of which surface here as `error`.
+ *
+ * F-BIZ-02: passing `evidence` is what turns this into a *dispute* against
+ * an already-claimed venue instead — required, non-empty, exactly when the
+ * venue is currently claimed; the database enforces that, not this
+ * function. Approving a dispute replaces the entire existing team at the
+ * venue, not just the disputed role — see the migration header on
+ * 20260828120000_add_ownership_transfer_and_dispute.sql for why that's the
+ * honest default for an adversarial claim.
  */
 export async function submitVenueClaim(input: {
   venueId: string;
   role: ClaimableBusinessRole;
+  evidence?: string;
 }): Promise<{ ok: true; claim: VenueClaim } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) {
     return { ok: false, error: 'No backend configured; this listing could not be claimed.' };
@@ -776,11 +786,38 @@ export async function submitVenueClaim(input: {
 
   const { data, error } = await supabase
     .from('venue_claims')
-    .insert({ user_id: user.id, venue_id: input.venueId, role: input.role })
+    .insert({ user_id: user.id, venue_id: input.venueId, role: input.role, evidence: input.evidence ?? null })
     .select('*')
     .single();
   if (error) return { ok: false, error: error.message };
   return { ok: true, claim: mapVenueClaim(data) };
+}
+
+/**
+ * F-BIZ-02: a current owner hands the venue to another account, through the
+ * same business_invites table F-BIZ-13 already uses for staff and managers
+ * — the database is what actually restricts this to an account that
+ * already holds `owner` at the venue (business_invites_insert), and what
+ * replaces the sender's own owner row on acceptance rather than adding a
+ * second owner alongside it (business_roles_consume_invite). Acceptance
+ * itself reuses the existing invite-accept flow (see acceptInvite) — the
+ * account being transferred to just sees a pending "owner" invite like any
+ * other, on their own profile.
+ */
+export async function transferOwnership(input: {
+  venueId: string;
+  email: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing was sent.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to transfer this listing.' };
+
+  const { error } = await supabase
+    .from('business_invites')
+    .insert({ venue_id: input.venueId, email: input.email.trim().toLowerCase(), role: 'owner', invited_by: user.id });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /**
@@ -862,7 +899,7 @@ function mapBusinessInvite(row: BusinessInviteRow): BusinessInvite {
     id: row.id,
     venueId: row.venue_id,
     email: row.email,
-    role: row.role as InvitableBusinessRole,
+    role: row.role as InvitableBusinessRole | 'owner',
     invitedBy: row.invited_by,
     createdAt: row.created_at,
     acceptedAt: row.accepted_at ?? undefined,
@@ -914,11 +951,14 @@ export async function getMyPendingInvites(): Promise<BusinessInvite[]> {
  * the invite row — the database's own guard is what actually checks a
  * matching invite exists before allowing it (see the migration header on
  * 20260825180000_add_business_invites.sql), and marks the invite accepted
- * as a side effect once it succeeds.
+ * as a side effect once it succeeds. `role: 'owner'` here means this is an
+ * ownership-transfer invite (F-BIZ-02) — accepting it also replaces the
+ * sender's own owner row, as a side effect of the same insert
+ * (business_roles_consume_invite), not a second write from this function.
  */
 export async function acceptInvite(input: {
   venueId: string;
-  role: InvitableBusinessRole;
+  role: InvitableBusinessRole | 'owner';
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the invite could not be accepted.' };
   const { data: auth } = await supabase.auth.getUser();

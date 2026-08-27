@@ -7,7 +7,9 @@ import {
   styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
-import { deleteInvite, getSentInvites, inviteToManageVenue } from '@/data/repository';
+import {
+  deleteInvite, getSentInvites, inviteToManageVenue, transferOwnership,
+} from '@/data/repository';
 import { relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -40,6 +42,9 @@ export default function InviteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [invites, setInvites] = useState<BusinessInvite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [transferEmail, setTransferEmail] = useState('');
+  const [transferring, setTransferring] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
 
   useEffect(() => {
     if (session.role === 'guest') attemptContribution();
@@ -104,6 +109,20 @@ export default function InviteScreen() {
   const revoke = async (id: string) => {
     const result = await deleteInvite(id);
     if (result.ok) setInvites((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const sendTransfer = async () => {
+    setTransferring(true);
+    setTransferError(null);
+    const result = await transferOwnership({ venueId: venue.id, email: transferEmail });
+    setTransferring(false);
+    if (!result.ok) {
+      setTransferError(result.error);
+      return;
+    }
+    setTransferEmail('');
+    const next = await getSentInvites(venue.id);
+    setInvites(next);
   };
 
   return (
@@ -176,8 +195,10 @@ export default function InviteScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[font.body, { color: theme.text }]}>{inv.email}</Text>
                     <Text style={[font.small, { color: theme.textFaint, marginTop: 2 }]}>
-                      {inv.role === 'manager' ? 'Manager' : 'Staff'} ·{' '}
-                      {inv.acceptedAt ? `Accepted ${relativeDate(inv.acceptedAt, now)}` : `Invited ${relativeDate(inv.createdAt, now)}`}
+                      {inv.role === 'owner' ? 'Ownership transfer' : inv.role === 'manager' ? 'Manager' : 'Staff'} ·{' '}
+                      {inv.acceptedAt
+                        ? `Accepted ${relativeDate(inv.acceptedAt.slice(0, 10), now)}`
+                        : `Invited ${relativeDate(inv.createdAt.slice(0, 10), now)}`}
                     </Text>
                   </View>
                   {inv.acceptedAt ? (
@@ -189,6 +210,54 @@ export default function InviteScreen() {
               </View>
             ))
           )}
+        </Card>
+      </View>
+
+      <View style={gutter()}>
+        <Text style={[font.cardTitle, { color: theme.onGround }]}>Transfer ownership</Text>
+      </View>
+
+      <View style={gutter()}>
+        <Card>
+          <Body dim>
+            Hands this listing to another account entirely — not a second owner. If that account
+            accepts, this one loses owner access to {venue.name}. Only an account that holds owner
+            here can actually do this; the database rejects it otherwise.
+          </Body>
+          <TextInput
+            value={transferEmail}
+            onChangeText={setTransferEmail}
+            placeholder="newowner@example.com"
+            placeholderTextColor={theme.textFaint}
+            accessibilityLabel="Email to transfer ownership to"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            style={[
+              font.body,
+              {
+                color: theme.text,
+                backgroundColor: theme.cardMuted,
+                borderRadius: radius.md,
+                paddingHorizontal: space.md,
+                minHeight: 48,
+                marginTop: space.md,
+              },
+            ]}
+          />
+          {transferError ? (
+            <Text style={[font.small, { color: theme.closed, marginTop: space.sm }]}>{transferError}</Text>
+          ) : null}
+          <Button
+            label="Send transfer"
+            variant="danger"
+            icon="swap-horizontal"
+            full
+            loading={transferring}
+            disabled={!transferEmail.trim()}
+            style={{ marginTop: space.md }}
+            onPress={sendTransfer}
+          />
         </Card>
       </View>
     </Screen>

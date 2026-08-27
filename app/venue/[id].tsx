@@ -907,6 +907,23 @@ export default function VenueProfile() {
                   Claimed and {venue.verified ? 'verified' : 'unverified'} owner
                 </Text>
               </View>
+              {!isManagingVenue(venue.id) ? (
+                <>
+                  <Divider />
+                  <Pressable
+                    onPress={() => requireAccount(() => router.push(`/claim/new?venueId=${venue.id}`))}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dispute this claim"
+                    style={[ui.row, { gap: space.md, minHeight: 44 }]}
+                  >
+                    <Ionicons name="flag-outline" size={18} color={theme.textFaint} />
+                    <Text style={[font.small, { color: theme.textDim, flex: 1 }]}>
+                      Think this is wrong? Dispute this claim
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+                  </Pressable>
+                </>
+              ) : null}
             </>
           ) : null}
           {isManagingVenue(venue.id) ? (

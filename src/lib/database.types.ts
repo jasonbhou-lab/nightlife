@@ -301,6 +301,8 @@ export type VenueClaimRow = {
   role: BusinessRoleEnum;
   status: VenueClaimStatusEnum;
   note: string | null;
+  /** F-BIZ-02: required (non-empty) only when disputing an already-claimed venue. */
+  evidence: string | null;
   created_at: string;
   decided_at: string | null;
   decided_by: string | null;
@@ -424,7 +426,10 @@ export type Database = {
       };
       venue_claims: {
         Row: VenueClaimRow;
-        Insert: Insertable<VenueClaimRow, 'id' | 'status' | 'note' | 'created_at' | 'decided_at' | 'decided_by'>;
+        Insert: Insertable<
+          VenueClaimRow,
+          'id' | 'status' | 'note' | 'evidence' | 'created_at' | 'decided_at' | 'decided_by'
+        >;
         Update: Partial<VenueClaimRow>;
         Relationships: [];
       };

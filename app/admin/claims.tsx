@@ -13,12 +13,15 @@ import { font, radius, space } from '@/theme';
 import type { VenueClaim } from '@/types';
 
 /**
- * F-BIZ-01, admin side: decide whether a self-attested claim gets accepted.
- * Approving here is the only thing that actually creates a business_roles
- * row and flips venues.claimed now — venue_claims_apply_decision() is what
- * enforces that and who may call it, not this screen; an account without
- * the admin platform role gets the database's own rejection back as
- * `error`, the same shape the moderation queue already uses.
+ * F-BIZ-01/02, admin side: decide whether a self-attested claim, or a
+ * dispute against an already-claimed venue, gets accepted. Approving here
+ * is the only thing that actually writes business_roles now —
+ * venue_claims_apply_decision() enforces that and who may call it, not
+ * this screen; an account without the admin platform role gets the
+ * database's own rejection back as `error`, the same shape the moderation
+ * queue already uses. A row with `evidence` is a dispute: approving it
+ * replaces the venue's *entire* current team, not just the disputed role
+ * (see 20260828120000_add_ownership_transfer_and_dispute.sql).
  */
 export default function AdminClaimsScreen() {
   const theme = useTheme();
@@ -118,10 +121,25 @@ export default function AdminClaimsScreen() {
                 <View key={claim.id}>
                   {i > 0 ? <Divider /> : null}
                   <View style={{ padding: space.lg }}>
-                    <Text style={[font.body, { color: theme.text }]}>{venue?.name ?? 'Unknown venue'}</Text>
+                    <View style={[ui.row, { gap: space.sm }]}>
+                      <Text style={[font.body, { color: theme.text, flex: 1 }]}>{venue?.name ?? 'Unknown venue'}</Text>
+                      {claim.evidence ? (
+                        <Text style={[font.small, { color: theme.closed }]}>Dispute</Text>
+                      ) : null}
+                    </View>
                     <Text style={[font.small, { color: theme.textFaint, marginTop: 2 }]}>
                       {claim.claimantName ?? 'Someone'} · claiming {claim.role} · {relativeDate(claim.createdAt.slice(0, 10), now)}
                     </Text>
+                    {claim.evidence ? (
+                      <Body dim style={{ marginTop: space.sm }} numberOfLines={4}>
+                        &ldquo;{claim.evidence}&rdquo;
+                      </Body>
+                    ) : null}
+                    {claim.evidence ? (
+                      <Text style={[font.small, { color: theme.closed, marginTop: space.sm }]}>
+                        Approving replaces the entire current team at this venue, not just the owner.
+                      </Text>
+                    ) : null}
                     {rejecting ? (
                       <View style={{ marginTop: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: theme.cardMuted }}>
                         <TextInput
