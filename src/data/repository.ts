@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -876,10 +877,22 @@ export async function transferOwnership(input: {
  */
 export async function getMyVenueClaim(venueId: string): Promise<VenueClaim | null> {
   if (!hasBackend || !supabase) return null;
+  // Scoped to the caller explicitly rather than left to RLS. venue_claims_read
+  // resolves to `user_id = auth.uid() OR holds_platform_role('admin')`, so for
+  // an admin this query without the filter returns whichever account claimed
+  // the venue most recently — which app/claim/new.tsx then renders as "your
+  // claim", complete with another person's evidence text and a Withdraw
+  // button. RLS is the boundary; matching the caller is this function's own
+  // job, and its name is a promise about whose row comes back.
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return null;
+
   const { data } = await supabase
     .from('venue_claims')
     .select('*')
     .eq('venue_id', venueId)
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -1549,6 +1562,49 @@ function toAuthProfile(
     : { displayName: 'You', phoneVerified: false, ageVerified: false };
 }
 
+/** The one deep link that is allowed to carry a session back into this app. */
+const AUTH_CALLBACK_PATH_URL = Linking.createURL('auth/callback');
+
+/**
+ * Set when this device requests a magic link, checked before one is consumed.
+ * See `completeAuthFromUrl` for why a path check alone is not enough.
+ */
+const MAGIC_LINK_REQUESTED_KEY = 'nightout.auth.magicLinkRequestedAt.v1';
+
+/** Matches Supabase's own default magic-link lifetime, so this never expires first. */
+const MAGIC_LINK_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Whether `url` is this app's auth callback and not just some other deep link
+ * that happens to carry token-shaped parameters.
+ *
+ * Both sides are run through `Linking.parse` and compared on the same
+ * normalized shape rather than by string equality, because the same logical
+ * route is spelled differently per platform — `nightout://auth/callback`
+ * parses to hostname `auth` + path `callback`, a web build parses to hostname
+ * `localhost` + path `auth/callback`, and Expo Go adds a `/--/` prefix.
+ * Whatever transformation applies, it applies to the expected URL too, so the
+ * comparison stays exact without hardcoding any one platform's spelling.
+ */
+function isAuthCallbackUrl(url: string): boolean {
+  const shape = (value: string) => {
+    const parsed = Linking.parse(value);
+    return [parsed.hostname ?? '', parsed.path ?? '']
+      .join('/')
+      .split('/')
+      // Drops empty segments from stray slashes and Expo Go's `--` separator,
+      // so the two sides differ only where the route genuinely differs.
+      .filter((segment) => segment && segment !== '--')
+      .join('/')
+      .toLowerCase();
+  };
+  try {
+    return shape(url) === shape(AUTH_CALLBACK_PATH_URL);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * `displayName` only takes effect the first time this email signs in —
  * `handle_new_user()` seeds `profiles.display_name` from it on account
@@ -1570,10 +1626,13 @@ export async function sendSignInCode(input: {
     email: input.email,
     options: {
       data: { display_name: input.displayName },
-      emailRedirectTo: Linking.createURL('auth/callback'),
+      emailRedirectTo: AUTH_CALLBACK_PATH_URL,
     },
   });
   if (error) return { ok: false, error: error.message };
+  // Records that *this device* asked for a link, which is what
+  // `completeAuthFromUrl` later requires before it will install a session.
+  await AsyncStorage.setItem(MAGIC_LINK_REQUESTED_KEY, String(Date.now())).catch(() => {});
   return { ok: true };
 }
 
@@ -1677,19 +1736,62 @@ export async function signInWithGoogle(): Promise<{ ok: true; profile: AuthProfi
  *
  * Unlike the Google flow, nothing in this app opened a browser session to
  * capture that redirect URL — it arrives as a cold-start or foreground deep
- * link instead, so `AppProvider` hands every incoming URL here
- * unconditionally. Returns `null` for any URL that is not actually this
- * callback (an ordinary in-app deep link, or a re-delivery of one already
- * consumed), so the caller does not need to pre-filter.
+ * link instead, so `AppProvider` hands every incoming URL here. Returns
+ * `null` for any URL that is not actually this callback (an ordinary in-app
+ * deep link, or a re-delivery of one already consumed), so the caller does
+ * not need to pre-filter.
+ *
+ * Two checks gate the token exchange, because a session installed here
+ * becomes the device's identity and everything the person writes afterwards —
+ * reviews, bookings, messages, photos — is written into whatever account
+ * these tokens belong to:
+ *
+ *  1. The URL must be the auth callback. Without this, *any* deep link
+ *     carrying `access_token`/`refresh_token` was consumed: on native a
+ *     `nightout://venue/vela?access_token=…` link from a QR code or an SMS,
+ *     and on web far worse, since expo-linking's `getInitialURL()` there
+ *     returns `window.location.href` verbatim and vercel.json rewrites every
+ *     path to the app — making an ordinary hyperlink to the deployed origin
+ *     enough.
+ *  2. This device must have actually asked for a link, recently. The path
+ *     check alone still leaves forced-login open, because nothing stops an
+ *     attacker from spelling the callback path correctly and pasting their
+ *     own tokens after it; the victim's app would adopt the attacker's
+ *     account and quietly hand over everything written next. Supabase's
+ *     implicit flow carries no state/nonce of its own to verify against, so
+ *     this stands in for one: an unsolicited callback is refused outright.
+ *
+ * The cost of (2) is that a link requested on one device cannot be opened on
+ * another. That is already true of a custom-scheme deep link, and the 6-digit
+ * code in the same email is the cross-device path — read it anywhere, type it
+ * into the app that asked. A proper `state` parameter or the PKCE flow would
+ * replace this local gate with a server-verified one; both are larger changes
+ * than this fix, since Google sign-in shares the same implicit-flow client.
  */
 export async function completeAuthFromUrl(
   url: string,
 ): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string } | null> {
   if (!hasBackend || !supabase) return null;
+  if (!isAuthCallbackUrl(url)) return null;
+
   const { params, errorCode } = QueryParams.getQueryParams(url);
   const { access_token, refresh_token } = params;
   if (!access_token || !refresh_token) return errorCode ? { ok: false, error: errorCode } : null;
-  return finishTokenSession(access_token, refresh_token);
+
+  const requestedAt = Number(await AsyncStorage.getItem(MAGIC_LINK_REQUESTED_KEY).catch(() => null));
+  if (!requestedAt || Date.now() - requestedAt > MAGIC_LINK_TTL_MS) {
+    return {
+      ok: false,
+      error:
+        'This sign-in link was not requested from this device, or it has expired. ' +
+        'Request a new one and open it here, or enter the 6-digit code instead.',
+    };
+  }
+
+  const result = await finishTokenSession(access_token, refresh_token);
+  // Single-use: a consumed link must not sign anyone in a second time.
+  if (result.ok) await AsyncStorage.removeItem(MAGIC_LINK_REQUESTED_KEY).catch(() => {});
+  return result;
 }
 
 /** A snapshot of an already-signed-in session, read once at launch. */

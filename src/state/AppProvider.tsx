@@ -368,10 +368,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * redirect by opening the browser itself), this URL arrives as a genuine
    * OS deep link — a cold start via `getInitialURL`, or a foreground/
    * background app via the `url` event — so every incoming URL is handed to
-   * `completeAuthFromUrl` unconditionally; it no-ops for anything that is not
-   * actually this callback. app/auth/callback.tsx is the screen expo-router
-   * lands on for `nightout://auth/callback` and reads `authCallbackError`
-   * while this resolves.
+   * `completeAuthFromUrl`, which decides what is safe to act on: it checks
+   * that the URL really is the auth callback and that this device asked for a
+   * link before it will install any session, and returns null for everything
+   * else. That filtering deliberately lives there rather than here, so no
+   * future caller can reach the token exchange without it.
+   * app/auth/callback.tsx is the screen expo-router lands on for
+   * `nightout://auth/callback` and reads `authCallbackError` while this
+   * resolves.
    */
   useEffect(() => {
     if (!hasBackend) return;

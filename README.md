@@ -316,6 +316,27 @@ and message threads stay exactly as blocked as before, since their RLS policies 
 `private.is_verified()` and nothing here can make that true. With no backend configured, sign-in
 falls back to the original local-only mock unchanged, so the app keeps working offline.
 
+**The emailed link, and why consuming one is gated twice** (`src/data/repository.ts`'s
+`completeAuthFromUrl`). Whether Supabase's email carries a 6-digit code or a tappable link is a
+dashboard template choice, so the app accepts both; the link arrives back as an OS deep link and is
+exchanged for a session. A session installed that way *becomes the device's identity*, and
+everything written afterwards — reviews, bookings, messages, photos, drafts — is written into
+whatever account those tokens belong to, so two checks gate the exchange. First, the URL has to be
+the auth callback: the first cut consumed any deep link carrying `access_token`/`refresh_token`,
+which on native meant a QR code or SMS pointing at `nightout://venue/vela?access_token=…`, and on
+web meant an ordinary hyperlink to the deployed origin, since expo-linking's `getInitialURL()` there
+returns `window.location.href` verbatim and `vercel.json` rewrites every path to the app. Second,
+this device has to have actually requested a link within the hour, because the path check alone
+still leaves forced-login open — nothing stops an attacker from spelling the callback path correctly
+and appending their own tokens, and the victim would go on using an account that is not theirs.
+Supabase's implicit flow carries no state or nonce to verify against, so a locally recorded request
+stands in for one and an unsolicited callback is refused. The cost is that a link requested on one
+device cannot be opened on another; that is already true of a custom-scheme deep link, and the code
+in the same email is the cross-device path. A real `state` parameter or PKCE would replace the local
+gate with a server-verified one, and is the right next step — it is a larger change because Google
+sign-in shares the same implicit-flow client. Google's own path never went through this listener:
+`openAuthSessionAsync` captures its redirect directly.
+
 **Google sign-in** (`app/auth.tsx`, `src/data/repository.ts`'s `signInWithGoogle`). A second real path
 onto the same account model as the one-time code above — there is no separate sign-up screen for
 either, on purpose: the first successful sign-in for a given identity, email or Google, *is* the
@@ -703,7 +724,18 @@ presentation only. So:
 - A photo's `by` (owner vs. community) is computed from `business_roles` by trigger, never trusted
   from the client, and a daily upload cap (8 photos, 40 for Elite) is enforced the same way
   (F-MEDIA-01). An upload's storage path is checked against real venue ids before it's accepted,
-  not just organized by convention.
+  not just organized by convention. That last check was silently broken until
+  `20260828170000_fix_venue_photos_upload_policy.sql`: the policy's `exists (select 1 from venues v
+  where v.id = (storage.foldername(v.name))[1])` looked like it read the object's path, but `venues`
+  has a `name` column of its own, so the unqualified `name` bound to the *venue's display name* and
+  the predicate never referenced the upload at all. It evaluated identically for every object in the
+  bucket — false for the current data, so every upload was being rejected, and true for all of them
+  at once had any venue name ever contained a `/` with a leading segment matching a venue id. The
+  rewrite evaluates `name` at the top level of the policy, where nothing can shadow it, and uses the
+  venues subquery only to supply ids. The bucket also carries a 10 MiB size cap and an
+  `image/jpeg|png|webp|heic` MIME allowlist, because it is public-read and the daily cap is a trigger
+  on the metadata row — neither constrains a direct storage write, so an account could otherwise have
+  parked an arbitrarily large file, or an HTML/SVG payload, on the project's own storage origin.
 - A business account can set `review_alert_threshold` on its own venue and nothing else through
   that write — the check constraint also rejects a value outside 1–5 at the row level, not just in
   the chip picker the client happens to offer (F-BIZ-07).
