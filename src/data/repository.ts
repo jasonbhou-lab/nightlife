@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
 import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
@@ -1562,17 +1563,33 @@ function toAuthProfile(
     : { displayName: 'You', phoneVerified: false, ageVerified: false };
 }
 
-/** The one deep link that is allowed to carry a session back into this app. */
-const AUTH_CALLBACK_PATH_URL = Linking.createURL('auth/callback');
+/**
+ * The one deep link that is allowed to carry a session back into this app.
+ *
+ * Resolved per call rather than once at module load: on web `createURL` builds
+ * from `window.location.origin` and returns an empty string when there is no
+ * `window`, so a module-scope constant would bake in '' under any rendering
+ * pass that evaluates this file outside a browser.
+ */
+function authCallbackUrl(): string {
+  return Linking.createURL('auth/callback');
+}
 
 /**
- * Set when this device requests a magic link, checked before one is consumed.
- * See `completeAuthFromUrl` for why a path check alone is not enough.
+ * Set when this device starts an auth flow that will come back through the
+ * callback URL — requesting a magic link, or handing the whole page to Google
+ * on web — and checked before any such callback is allowed to install a
+ * session. See `completeAuthFromUrl` for why a path check alone is not enough.
  */
-const MAGIC_LINK_REQUESTED_KEY = 'nightout.auth.magicLinkRequestedAt.v1';
+const AUTH_FLOW_STARTED_KEY = 'nightout.auth.flowStartedAt.v1';
 
 /** Matches Supabase's own default magic-link lifetime, so this never expires first. */
-const MAGIC_LINK_TTL_MS = 60 * 60 * 1000;
+const AUTH_FLOW_TTL_MS = 60 * 60 * 1000;
+
+/** Best-effort: a device that cannot write this simply has to use the 6-digit code. */
+async function markAuthFlowStarted(): Promise<void> {
+  await AsyncStorage.setItem(AUTH_FLOW_STARTED_KEY, String(Date.now())).catch(() => {});
+}
 
 /**
  * Whether `url` is this app's auth callback and not just some other deep link
@@ -1599,7 +1616,7 @@ function isAuthCallbackUrl(url: string): boolean {
       .toLowerCase();
   };
   try {
-    return shape(url) === shape(AUTH_CALLBACK_PATH_URL);
+    return shape(url) === shape(authCallbackUrl());
   } catch {
     return false;
   }
@@ -1626,13 +1643,13 @@ export async function sendSignInCode(input: {
     email: input.email,
     options: {
       data: { display_name: input.displayName },
-      emailRedirectTo: AUTH_CALLBACK_PATH_URL,
+      emailRedirectTo: authCallbackUrl(),
     },
   });
   if (error) return { ok: false, error: error.message };
   // Records that *this device* asked for a link, which is what
   // `completeAuthFromUrl` later requires before it will install a session.
-  await AsyncStorage.setItem(MAGIC_LINK_REQUESTED_KEY, String(Date.now())).catch(() => {});
+  await markAuthFlowStarted();
   return { ok: true };
 }
 
@@ -1677,32 +1694,61 @@ async function finishTokenSession(
  * the first successful Google sign-in *is* the account creation, exactly
  * like the first-ever code verification for an email is.
  *
- * Supabase Auth's OAuth flow is browser-based even from a native app: it
- * hands back a URL to `https://<project>.supabase.co/auth/v1/authorize`,
- * this app opens that in `expo-web-browser`'s `openAuthSessionAsync` (which
- * on iOS/Android is a real system-managed auth session, not just an
- * in-app webview), and Google's own consent screen and the OAuth client's
- * secret never pass through this app at all — both stay on Supabase's side.
- * `redirectTo` is the same deep link the emailed magic link uses (see
- * `completeAuthFromUrl` below); Supabase appends the session as URL
- * parameters when it sends the browser there, and `expo-auth-session`'s
- * `QueryParams` helper is what actually parses those back out, since they
- * can land in the URL fragment rather than the query string and a plain
- * `URL` parser here would miss that half.
+ * Supabase Auth's OAuth flow is browser-based either way: it hands back a URL
+ * to `https://<project>.supabase.co/auth/v1/authorize`, and Google's own
+ * consent screen and the OAuth client's secret never pass through this app at
+ * all — both stay on Supabase's side. `redirectTo` is the same callback the
+ * emailed magic link uses (see `completeAuthFromUrl` below); Supabase appends
+ * the session as URL parameters when it sends the browser there.
  *
- * There is no PKCE code exchange here — this app's own client uses the
- * implicit flow already (see src/lib/supabase.ts) — and
- * `openAuthSessionAsync` already resolves with the redirect URL itself once
- * the browser session completes, so this flow alone needs no deep-link
- * listener. On web, this needs `expo start --web --https` in development —
- * the redirect's crypto-state check requires the same origin the flow
- * started from, which a plain `http://localhost` dev server cannot satisfy;
- * native and standalone/dev-client builds are not affected.
+ * How the browser gets there differs by platform, and deliberately so:
+ *
+ *  - **Native** opens the URL with `expo-web-browser`'s
+ *    `openAuthSessionAsync`, a real system-managed auth session (not an
+ *    in-app webview, which Google refuses outright). It resolves with the
+ *    redirect URL itself, so the tokens are read straight off that return
+ *    value and this path never touches the deep-link listener.
+ *    `expo-auth-session`'s `QueryParams` helper does the parsing, since the
+ *    tokens can land in the fragment rather than the query string and a plain
+ *    `URL` parser would miss that half.
+ *  - **Web** hands over the whole page instead. `openAuthSessionAsync` is
+ *    implemented with `window.open` there, which meant Google sign-in popped
+ *    a second window; leaving `skipBrowserRedirect` off lets supabase-js
+ *    `window.location.assign` the current tab, and the session comes back
+ *    through the ordinary callback route on the next page load. Nothing after
+ *    the call is guaranteed to run once navigation starts, which is what the
+ *    `'redirecting'` outcome tells the caller.
+ *
+ * Because the web leg returns through `completeAuthFromUrl` rather than
+ * inline, it has to satisfy the same gate the magic link does — hence
+ * `markAuthFlowStarted()` before navigating away. AsyncStorage is
+ * localStorage on web, so the mark survives the round trip.
+ *
+ * There is no PKCE code exchange here; this app's client uses the implicit
+ * flow (see src/lib/supabase.ts). In web development this needs `expo start
+ * --web --https`: the redirect's crypto-state check requires the same origin
+ * the flow started from, which a plain `http://localhost` dev server cannot
+ * satisfy. Native and standalone/dev-client builds are not affected.
  */
-export async function signInWithGoogle(): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string }> {
+export async function signInWithGoogle(): Promise<
+  { ok: true; profile: AuthProfile } | { ok: false; error: string } | { ok: 'redirecting' }
+> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is nowhere to sign in to.' };
 
-  const redirectTo = Linking.createURL('auth/callback');
+  const redirectTo = authCallbackUrl();
+
+  if (Platform.OS === 'web') {
+    // Marked before the call, not after: supabase-js navigates the tab as
+    // part of it, and anything queued behind that may never run.
+    await markAuthFlowStarted();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: 'redirecting' };
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo, skipBrowserRedirect: true },
@@ -1778,8 +1824,8 @@ export async function completeAuthFromUrl(
   const { access_token, refresh_token } = params;
   if (!access_token || !refresh_token) return errorCode ? { ok: false, error: errorCode } : null;
 
-  const requestedAt = Number(await AsyncStorage.getItem(MAGIC_LINK_REQUESTED_KEY).catch(() => null));
-  if (!requestedAt || Date.now() - requestedAt > MAGIC_LINK_TTL_MS) {
+  const startedAt = Number(await AsyncStorage.getItem(AUTH_FLOW_STARTED_KEY).catch(() => null));
+  if (!startedAt || Date.now() - startedAt > AUTH_FLOW_TTL_MS) {
     return {
       ok: false,
       error:
@@ -1789,8 +1835,8 @@ export async function completeAuthFromUrl(
   }
 
   const result = await finishTokenSession(access_token, refresh_token);
-  // Single-use: a consumed link must not sign anyone in a second time.
-  if (result.ok) await AsyncStorage.removeItem(MAGIC_LINK_REQUESTED_KEY).catch(() => {});
+  // Single-use: a consumed callback must not sign anyone in a second time.
+  if (result.ok) await AsyncStorage.removeItem(AUTH_FLOW_STARTED_KEY).catch(() => {});
   return result;
 }
 

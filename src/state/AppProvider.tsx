@@ -102,8 +102,12 @@ type Ctx = {
    * separate flow. There is no "sign up with Google" distinct from "sign in
    * with Google": the first successful call for a given Google account is
    * what creates it, same as the email code's first-ever verification does.
+   *
+   * `'redirecting'` is the web outcome: the tab has been handed to Google and
+   * the session arrives later through the callback route, so the caller should
+   * keep showing progress rather than treating it as done or failed.
    */
-  signInWithGoogle: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  signInWithGoogle: () => Promise<{ ok: true } | { ok: false; error: string } | { ok: 'redirecting' }>;
   /**
    * Set when the user tapped the magic-link email and Supabase's redirect
    * carried an error (expired or already-used link) instead of a session —
@@ -449,8 +453,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [applyAuthProfile],
   );
 
-  const signInWithGoogle = useCallback(async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+  const signInWithGoogle = useCallback(async (): Promise<
+    { ok: true } | { ok: false; error: string } | { ok: 'redirecting' }
+  > => {
     const result = await signInWithGoogleRemote();
+    // Web hands the tab to Google and finishes through the callback route
+    // instead of returning a profile here; there is nothing to apply yet.
+    if (result.ok === 'redirecting') return result;
     if (!result.ok) return result;
     applyAuthProfile(result.profile);
     getManagedVenueIds().then(setManagedVenueIds).catch(() => {});

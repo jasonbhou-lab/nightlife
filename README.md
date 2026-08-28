@@ -340,7 +340,19 @@ sign-in shares the same implicit-flow client. Google's own path never went throu
 **Google sign-in** (`app/auth.tsx`, `src/data/repository.ts`'s `signInWithGoogle`). A second real path
 onto the same account model as the one-time code above — there is no separate sign-up screen for
 either, on purpose: the first successful sign-in for a given identity, email or Google, *is* the
-account creation. Supabase Auth's OAuth flow is browser-based even from a native app: this app opens
+account creation. How the browser gets to Google differs by platform. Native opens a real system-managed auth session,
+which is both the platform-correct pattern and a hard requirement, since Google refuses OAuth inside
+an embedded webview. Web hands over the current tab instead: `expo-web-browser` implements
+`openAuthSessionAsync` with `window.open`, so routing web through it popped a second window, and
+leaving `skipBrowserRedirect` off instead lets supabase-js `window.location.assign` the tab in place.
+The web leg therefore comes back through the ordinary callback route on the next page load rather
+than returning inline, which means it has to satisfy the same gate the emailed link does — so the
+auth-flow mark is written *before* navigating away, and survives the round trip because AsyncStorage
+is localStorage on web. `signInWithGoogle` returns a distinct `'redirecting'` outcome for this case:
+nothing queued after the call is guaranteed to run once navigation starts, so the caller keeps
+showing progress rather than flashing "signed in" at a page about to unload.
+
+Supabase Auth's OAuth flow is browser-based even from a native app: this app opens
 Supabase's `/authorize` URL in `expo-web-browser`'s `openAuthSessionAsync` (a real system-managed
 auth session on iOS/Android, not an in-app webview) and parses the session back out of the resulting
 redirect with `expo-auth-session`'s `QueryParams` helper — Google's own consent screen, and the OAuth

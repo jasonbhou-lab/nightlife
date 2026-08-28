@@ -48,6 +48,10 @@ export default function AuthScreen() {
     setGoogleBusy(true);
     setError(null);
     const result = await signInWithGoogle();
+    // On web this tab is already navigating to Google. Leave the button in its
+    // loading state rather than flashing "signed in" at a page about to unload;
+    // the session lands through app/auth/callback.tsx when Google comes back.
+    if (result.ok === 'redirecting') return;
     setGoogleBusy(false);
     if (!result.ok) {
       setError(result.error);
