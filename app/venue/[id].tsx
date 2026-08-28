@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
 
 import { AttributePanel } from '@/components/AttributePanel';
+import { Flames } from '@/components/Flames';
 import { PhotoTile, albumLabel } from '@/components/PhotoTile';
 import { Meter, Stars } from '@/components/Stars';
 import { OpenPill, VenueCard } from '@/components/VenueCard';
@@ -427,6 +428,19 @@ export default function VenueProfile() {
               </View>
             </Pressable>
             <Divider style={{ width: 1, height: 40 }} />
+            <Pressable
+              onPress={() => router.push(`/reviews/${venue.id}`)}
+              accessibilityRole="button"
+              accessibilityLabel={`Vibe rating ${venue.vibeRating} out of 5 flames. Open all reviews.`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44 }}
+            >
+              <Text style={[font.display, { color: theme.text }]}>{venue.vibeRating.toFixed(1)}</Text>
+              <View>
+                <Flames value={venue.vibeRating} size={13} />
+                <Text style={[font.small, { color: theme.textDim, marginTop: 2 }]}>vibe</Text>
+              </View>
+            </Pressable>
+            <Divider style={{ width: 1, height: 40 }} />
             <View>
               <Text style={[font.cardTitle, { color: theme.text }]}>{priceLabel(venue.priceTier)}</Text>
               <Text style={[font.small, { color: theme.textDim }]}>{venue.distanceMi.toFixed(1)} mi away</Text>
@@ -812,6 +826,7 @@ export default function VenueProfile() {
                 </View>
                 <View style={[ui.row, { gap: space.sm, marginTop: 2 }]}>
                   <Stars value={r.rating} size={12} />
+                  <Flames value={r.vibeRating} size={12} />
                   <Text style={[font.small, { color: theme.textFaint }]}>{relativeDate(r.date, now)}</Text>
                 </View>
               </View>

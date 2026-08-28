@@ -61,6 +61,7 @@ export type VenueRow = {
   phone: string | null;
   website: string | null;
   rating: number;
+  vibe_rating: number;
   review_count: number;
   claimed: boolean;
   verified: boolean;
@@ -137,6 +138,7 @@ export type ReviewRow = {
   author_trust: number;
   elite: boolean;
   rating: number;
+  vibe_rating: number;
   sub_ratings: Json;
   body: string;
   visited_on: string | null;
@@ -202,6 +204,7 @@ export type ReviewDraftRow = {
   user_id: string;
   venue_id: string;
   rating: number | null;
+  vibe_rating: number | null;
   sub_ratings: Json;
   body: string | null;
   tags: Json;

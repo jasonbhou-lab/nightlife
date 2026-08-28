@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { FlameInput } from '@/components/Flames';
 import { PhotoTile } from '@/components/PhotoTile';
 import { StarInput } from '@/components/Stars';
 import {
@@ -50,6 +51,7 @@ export default function NewReviewScreen() {
   const existing = id ? drafts[id] : undefined;
 
   const [rating, setRating] = useState(existing?.rating ?? 0);
+  const [vibeRating, setVibeRating] = useState(existing?.vibeRating ?? 0);
   const [subs, setSubs] = useState<Partial<Record<SubRatingKey, number>>>(existing?.subRatings ?? {});
   const [text, setText] = useState(existing?.text ?? '');
   const [tags, setTags] = useState<Review['tags']>(existing?.tags ?? {});
@@ -68,14 +70,14 @@ export default function NewReviewScreen() {
   // Autosave with a short debounce.
   useEffect(() => {
     if (!venue || submitted) return;
-    if (!rating && !text && Object.keys(subs).length === 0) return;
+    if (!rating && !vibeRating && !text && Object.keys(subs).length === 0) return;
     const t = setTimeout(() => {
       const stamp = new Date().toISOString();
-      saveDraft({ venueId: venue.id, rating, subRatings: subs, text, tags, photoCount, savedAt: stamp });
+      saveDraft({ venueId: venue.id, rating, vibeRating, subRatings: subs, text, tags, photoCount, savedAt: stamp });
       setSavedAt(stamp);
     }, 900);
     return () => clearTimeout(t);
-  }, [rating, subs, text, tags, photoCount, venue, saveDraft, submitted]);
+  }, [rating, vibeRating, subs, text, tags, photoCount, venue, saveDraft, submitted]);
 
   const addPhoto = async (source: 'library' | 'camera') => {
     if (!venue) return;
@@ -102,7 +104,7 @@ export default function NewReviewScreen() {
   };
 
   const remaining = Math.max(0, MIN_CHARS - text.trim().length);
-  const canSubmit = rating > 0 && remaining === 0;
+  const canSubmit = rating > 0 && vibeRating > 0 && remaining === 0;
 
   const tagCount = useMemo(() => Object.values(tags).filter((v) => v != null).length, [tags]);
 
@@ -191,6 +193,22 @@ export default function NewReviewScreen() {
               {rating === 0
                 ? 'Tap to rate'
                 : ['Bad', 'Poor', 'Okay', 'Good', 'Great'][rating - 1]}
+            </Text>
+          </View>
+        </Card>
+      </View>
+
+      {/* Vibe Rating: energy/atmosphere, a distinct axis from quality (Overall
+          above), same mandatory whole-number treatment. */}
+      <View style={gutter()}>
+        <Card>
+          <Label>Vibe</Label>
+          <View style={{ marginTop: space.md, alignItems: 'center' }}>
+            <FlameInput value={vibeRating} onChange={setVibeRating} size={36} />
+            <Text style={[font.meta, { color: theme.textDim, marginTop: space.sm }]}>
+              {vibeRating === 0
+                ? 'Tap to rate'
+                : ['Dead', 'Mellow', 'Solid', 'High energy', 'Electric'][vibeRating - 1]}
             </Text>
           </View>
         </Card>
@@ -403,7 +421,15 @@ export default function NewReviewScreen() {
 
       <View style={[gutter(), { gap: space.sm }]}>
         <Button
-          label={canSubmit ? 'Publish review' : rating === 0 ? 'Rate it first' : `${remaining} characters to go`}
+          label={
+            canSubmit
+              ? 'Publish review'
+              : rating === 0
+                ? 'Rate it first'
+                : vibeRating === 0
+                  ? 'Rate the vibe'
+                  : `${remaining} characters to go`
+          }
           full
           disabled={!canSubmit}
           onPress={() => {
@@ -419,6 +445,7 @@ export default function NewReviewScreen() {
             saveDraft({
               venueId: venue.id,
               rating,
+              vibeRating,
               subRatings: subs,
               text,
               tags,

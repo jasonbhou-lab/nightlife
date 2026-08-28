@@ -85,6 +85,22 @@ the rating and the default view but remain reachable behind a disclosed link, wi
 rationale exposed. Comped visits carry a disclosure badge. The aggregate rating weights recency,
 reviewer trust, and detail, and the plain-language explanation of that is published in the app.
 
+**Vibe Rating** (`src/components/Flames.tsx`, `Review.vibeRating`, `Venue.vibeRating`). A second
+1-5 rating axis — energy/atmosphere rather than quality — given the exact same treatment as the
+star rating: a mandatory whole-number tap per review (`FlameInput`, alongside `Overall` in the
+composer), the same weighted aggregate (`aggregateFor` now returns `vibeRating`/`vibeDistribution`
+next to `rating`/`distribution`, using the identical recency/trust/detail weights), the same static
+seeded rollup column on `venues` with no server-side recompute trigger, shown everywhere the star
+rating is: the venue card, the profile header, the reviews list, and as its own "Vibe" sort key and
+3/4/4.5-flame filter in the search sheet. Seed reviews predate this axis, so their `vibeRating`
+defaults to their `rating` (documented in `src/data/reviews.ts`) rather than inventing sentiment no
+reviewer expressed; venue-level `vibeRating` was hand-set per venue to reflect atmosphere
+independent of quality — a rowdy nightclub with a middling star rating can carry the highest vibe
+rating in the corpus, and a quiet excellent cocktail bar the lowest, which is the point of a second
+axis. Named `Flames`/`FlameInput`/`vibeRating` rather than reusing `vibes.ts`'s `VibeKey`/`VibeDef`
+(F-SEARCH-12's mood-based *search ranking* concept) — same English word, two unrelated systems, so
+the code makes them look unrelated too.
+
 **Vibe search** (`src/lib/vibes.ts`, F-SEARCH-12). "Dressy," "date night," "low-key," and "bottle
 service crowd" are the PRD's own examples, and none of them are things a venue says about itself —
 they're what its reviews and photos show. Same honesty as F-SEARCH-11's natural-language parser:

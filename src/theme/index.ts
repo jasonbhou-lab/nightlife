@@ -38,6 +38,8 @@ export const palette = {
   white: '#FFFFFF',
   amber: '#F59E0B',
   amberSoft: '#FEF3C7',
+  orange: '#F97316',
+  orangeSoft: '#FFEDD5',
   green: '#16A34A',
   greenSoft: '#DCFCE7',
   red: '#DC2626',
@@ -110,6 +112,8 @@ export type Theme = {
   insetDim: string;
   /** Semantics. */
   star: string;
+  /** Vibe Rating flames — distinct from `star` so the two ratings read as separate signals. */
+  flame: string;
   open: string;
   openSoft: string;
   closed: string;
@@ -154,6 +158,7 @@ export const lightTheme: Theme = {
   insetText: palette.white,
   insetDim: 'rgba(255,255,255,0.66)',
   star: palette.amber,
+  flame: palette.orange,
   open: palette.green,
   openSoft: palette.greenSoft,
   closed: palette.red,
@@ -184,6 +189,7 @@ export const darkTheme: Theme = {
   insetText: palette.white,
   insetDim: 'rgba(255,255,255,0.60)',
   star: palette.amber,
+  flame: '#FB923C',
   open: '#34D399',
   openSoft: 'rgba(52,211,153,0.16)',
   closed: '#F87171',

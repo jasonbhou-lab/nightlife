@@ -314,6 +314,13 @@ export type Review = {
   authorTrust: number;
   elite: boolean;
   rating: number;
+  /**
+   * Vibe Rating (1-5 flames): the venue's energy/atmosphere, rated the same
+   * way as `rating` — whole number, mandatory per review — but a distinct
+   * axis from quality. A quiet, excellent restaurant and a rowdy, mediocre
+   * one can land on opposite ends of this scale from their star rating.
+   */
+  vibeRating: number;
   subRatings: Partial<Record<SubRatingKey, number>>;
   text: string;
   date: string;
@@ -359,6 +366,8 @@ export type Venue = {
   phone: string;
   website?: string;
   rating: number;
+  /** Vibe Rating (1-5 flames): community-rated energy/atmosphere, a distinct axis from `rating`. */
+  vibeRating: number;
   reviewCount: number;
   claimed: boolean;
   verified: boolean;
@@ -575,6 +584,7 @@ export type Collection = {
 export type ReviewDraft = {
   venueId: string;
   rating: number;
+  vibeRating: number;
   subRatings: Partial<Record<SubRatingKey, number>>;
   text: string;
   tags: Review['tags'];
@@ -585,6 +595,7 @@ export type ReviewDraft = {
 export type SortKey =
   | 'relevance'
   | 'rating'
+  | 'vibeRating'
   | 'distance'
   | 'reviewCount'
   | 'price'
@@ -603,6 +614,7 @@ export type FilterState = {
   attributes: Record<string, AttributeValue>;
   priceTiers: number[];
   minRating: number | null;
+  minVibeRating: number | null;
   openNow: boolean;
   /** "Open at" in HH:mm, evaluated against the operating calendar. */
   openAt: string | null;

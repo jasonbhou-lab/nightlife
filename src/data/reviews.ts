@@ -11,9 +11,17 @@ import type { Review } from '@/types';
  *    something to render.
  */
 
+/**
+ * Seed reviews predate the Vibe Rating axis, so there is no independent
+ * reviewer opinion to backfill it with — `vibeRating` defaults to the same
+ * value as `rating` (overridable per review below) rather than inventing
+ * sentiment nobody actually expressed. New reviews written through the app
+ * rate it independently.
+ */
 const r = (v: Partial<Review> & Pick<Review, 'id' | 'venueId' | 'author' | 'rating' | 'text' | 'date'>): Review => ({
   authorTrust: 0.6,
   elite: false,
+  vibeRating: v.rating,
   subRatings: {},
   edited: false,
   helpful: 0,

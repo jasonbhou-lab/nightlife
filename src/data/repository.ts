@@ -86,6 +86,7 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
     phone: row.phone ?? '',
     website: row.website ?? undefined,
     rating: Number(row.rating),
+    vibeRating: Number(row.vibe_rating),
     reviewCount: row.review_count,
     claimed: row.claimed,
     verified: row.verified,
@@ -161,6 +162,7 @@ function mapReview(row: ReviewRow): Review {
     authorTrust: Number(row.author_trust),
     elite: row.elite,
     rating: row.rating,
+    vibeRating: row.vibe_rating,
     subRatings: asRecord(row.sub_ratings) as Review['subRatings'],
     text: row.body,
     date: (row.visited_on ?? row.created_at).slice(0, 10),
@@ -463,6 +465,7 @@ export async function loadCatalogue(
 export async function publishReview(input: {
   venueId: string;
   rating: number;
+  vibeRating: number;
   subRatings: Review['subRatings'];
   text: string;
   tags: Review['tags'];
@@ -490,6 +493,7 @@ export async function publishReview(input: {
       author_id: user.id,
       author_name: profile?.display_name ?? 'Guest',
       rating: input.rating,
+      vibe_rating: input.vibeRating,
       sub_ratings: input.subRatings as never,
       body: input.text,
       tags: input.tags as never,
@@ -573,6 +577,7 @@ export async function cancelBookingRemote(bookingId: string): Promise<{ ok: true
 export async function syncDraft(input: {
   venueId: string;
   rating: number;
+  vibeRating: number;
   subRatings: Review['subRatings'];
   text: string;
   tags: Review['tags'];
@@ -586,6 +591,7 @@ export async function syncDraft(input: {
     user_id: auth.user.id,
     venue_id: input.venueId,
     rating: input.rating || null,
+    vibe_rating: input.vibeRating || null,
     sub_ratings: input.subRatings as never,
     body: input.text || null,
     tags: input.tags as never,

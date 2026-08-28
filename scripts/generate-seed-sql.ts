@@ -95,6 +95,7 @@ const venueRow = (v: Venue, withSuccessor: boolean) => `(
   ${q(v.phone)},
   ${q(v.website)},
   ${n(v.rating)},
+  ${n(v.vibeRating)},
   ${n(v.reviewCount)},
   ${b(v.claimed)},
   ${b(v.verified)},
@@ -125,7 +126,7 @@ const venueRow = (v: Venue, withSuccessor: boolean) => `(
 const venueCols = `insert into venues (
   id, name, alternate_names, primary_vertical, primary_category, secondary,
   price_tier, neighborhood, address, map_x, map_y, phone, website, rating,
-  review_count, claimed, verified, opened_year, closure_state, closure_note,
+  vibe_rating, review_count, claimed, verified, opened_year, closure_state, closure_note,
   closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
   photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
@@ -146,6 +147,7 @@ const VENUE_UPSERT = `on conflict (id) do update set
   phone = excluded.phone,
   website = excluded.website,
   rating = excluded.rating,
+  vibe_rating = excluded.vibe_rating,
   review_count = excluded.review_count,
   claimed = excluded.claimed,
   verified = excluded.verified,
@@ -269,6 +271,7 @@ const reviewRow = (r: Review) => `  (
     ${n(r.authorTrust)},
     ${b(r.elite)},
     ${n(r.rating)},
+    ${n(r.vibeRating)},
     ${j(r.subRatings)},
     ${q(r.text)},
     ${q(r.date)}::date,
@@ -286,7 +289,7 @@ const reviewRow = (r: Review) => `  (
   )`;
 
 const reviewCols = `insert into reviews (
-  seed_key, venue_id, author_name, author_trust, elite, rating, sub_ratings, body,
+  seed_key, venue_id, author_name, author_trust, elite, rating, vibe_rating, sub_ratings, body,
   visited_on, created_at, edited, helpful, insightful, funny, tags, photo_count,
   comped, recommended, owner_response, owner_response_at
 ) values`;
@@ -297,6 +300,7 @@ const REVIEW_UPSERT = `on conflict (seed_key) do update set
   author_trust = excluded.author_trust,
   elite = excluded.elite,
   rating = excluded.rating,
+  vibe_rating = excluded.vibe_rating,
   sub_ratings = excluded.sub_ratings,
   body = excluded.body,
   visited_on = excluded.visited_on,

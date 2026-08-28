@@ -23,6 +23,7 @@ import type { Review, SortKey, Venue, Vertical } from '@/types';
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'relevance', label: 'Relevance' },
   { key: 'rating', label: 'Rating' },
+  { key: 'vibeRating', label: 'Vibe' },
   { key: 'distance', label: 'Distance' },
   { key: 'reviewCount', label: 'Most reviewed' },
   { key: 'price', label: 'Price' },
@@ -134,6 +135,7 @@ export default function SearchScreen() {
     else if (key === 'categories') setFilters({ ...filters, categories: [] });
     else if (key === 'priceTiers') setFilters({ ...filters, priceTiers: [] });
     else if (key === 'minRating') setFilters({ ...filters, minRating: null });
+    else if (key === 'minVibeRating') setFilters({ ...filters, minVibeRating: null });
     else if (key === 'openNow') setFilters({ ...filters, openNow: false });
     else if (key === 'openAt') setFilters({ ...filters, openAt: null });
     else if (key === 'maxDistanceMi') setFilters({ ...filters, maxDistanceMi: null });
@@ -157,6 +159,7 @@ export default function SearchScreen() {
       out.push({ key: 'priceTiers', label: filters.priceTiers.map((t) => '$'.repeat(t)).join(' ') });
     }
     if (filters.minRating != null) out.push({ key: 'minRating', label: `${filters.minRating}+ stars` });
+    if (filters.minVibeRating != null) out.push({ key: 'minVibeRating', label: `${filters.minVibeRating}+ flames` });
     if (filters.openNow) out.push({ key: 'openNow', label: 'Open now' });
     if (filters.openAt) out.push({ key: 'openAt', label: `Open at ${filters.openAt}` });
     if (filters.maxDistanceMi != null) out.push({ key: 'maxDistanceMi', label: `${filters.maxDistanceMi} mi` });

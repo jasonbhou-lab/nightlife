@@ -13,6 +13,7 @@ export const emptyFilters: FilterState = {
   attributes: {},
   priceTiers: [],
   minRating: null,
+  minVibeRating: null,
   openNow: false,
   openAt: null,
   maxDistanceMi: null,
@@ -27,6 +28,7 @@ export function activeFilterCount(f: FilterState): number {
     Object.keys(f.attributes).length +
     f.priceTiers.length +
     (f.minRating != null ? 1 : 0) +
+    (f.minVibeRating != null ? 1 : 0) +
     (f.openNow ? 1 : 0) +
     (f.openAt ? 1 : 0) +
     (f.maxDistanceMi != null ? 1 : 0)
@@ -141,6 +143,11 @@ export function buildPredicates(f: FilterState, now: Date): Predicate[] {
     out.push({ key: 'minRating', label: `the ${min}+ star filter`, test: (v) => v.rating >= min });
   }
 
+  if (f.minVibeRating != null) {
+    const min = f.minVibeRating;
+    out.push({ key: 'minVibeRating', label: `the ${min}+ flame filter`, test: (v) => v.vibeRating >= min });
+  }
+
   if (f.openNow) {
     out.push({ key: 'openNow', label: '“open now”', test: (v) => venueState(v, now).open });
   }
@@ -188,6 +195,8 @@ function comparator(sort: SortKey, f: FilterState, now: Date) {
     switch (sort) {
       case 'rating':
         return b.rating - a.rating || b.reviewCount - a.reviewCount;
+      case 'vibeRating':
+        return b.vibeRating - a.vibeRating || b.reviewCount - a.reviewCount;
       case 'distance':
         return a.distanceMi - b.distanceMi;
       case 'reviewCount':

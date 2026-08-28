@@ -4,6 +4,7 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { AdLabel, Card, IconBadge, styles as ui } from '@/components/ui';
+import { Flames } from '@/components/Flames';
 import { Stars } from '@/components/Stars';
 import { verticalMeta } from '@/data/taxonomy';
 import { decisionChips } from '@/lib/decide';
@@ -55,7 +56,7 @@ export function VenueCard({
       <Pressable
         onPress={onPress ?? (() => router.push(`/venue/${venue.id}`))}
         accessibilityRole="button"
-        accessibilityLabel={`${venue.name}, ${venue.primary.category}, rated ${venue.rating} from ${venue.reviewCount} reviews, ${state.label}`}
+        accessibilityLabel={`${venue.name}, ${venue.primary.category}, rated ${venue.rating} from ${venue.reviewCount} reviews, vibe rating ${venue.vibeRating}, ${state.label}`}
         style={({ pressed }) => [{ padding: space.lg }, pressed && { opacity: 0.9 }]}
       >
       {venue.promoted ? (
@@ -94,6 +95,7 @@ export function VenueCard({
           <Text style={[font.small, { color: theme.textFaint, marginTop: 1 }]}>
             {venue.reviewCount.toLocaleString('en-US')}
           </Text>
+          <Flames value={venue.vibeRating} size={10} />
         </View>
       </View>
 

@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 
+import { Flames } from '@/components/Flames';
 import { Meter, Stars } from '@/components/Stars';
 import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
@@ -107,6 +108,11 @@ export default function ReviewsScreen() {
               <Text style={[font.small, { color: theme.textDim, marginTop: 4 }]}>
                 {venue.reviewCount.toLocaleString('en-US')} counted
               </Text>
+            </View>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={[font.display, { color: theme.text }]}>{venue.vibeRating.toFixed(1)}</Text>
+              <Flames value={venue.vibeRating} size={13} />
+              <Text style={[font.small, { color: theme.textDim, marginTop: 4 }]}>vibe</Text>
             </View>
             <View style={{ flex: 1 }}>
               {[5, 4, 3, 2, 1].map((star) => {
@@ -363,6 +369,7 @@ function ReviewCard({
           </View>
           <View style={[ui.row, { gap: space.sm, marginTop: 2 }]}>
             <Stars value={r.rating} size={12} />
+            <Flames value={r.vibeRating} size={12} />
             <Text style={[font.small, { color: theme.textFaint }]}>
               {relativeDate(r.date, now)}
               {r.edited ? ' · edited' : ''}

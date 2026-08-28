@@ -290,6 +290,20 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
               </View>
 
               <Divider style={{ marginVertical: space.md }} />
+              <Label>Vibe Rating</Label>
+              <View style={[ui.row, { gap: space.sm, marginTop: space.sm }]}>
+                {[3, 4, 4.5].map((r) => (
+                  <Chip
+                    key={r}
+                    label={`${r}+`}
+                    icon="flame"
+                    selected={draft.minVibeRating === r}
+                    onPress={() => setDraft((p) => ({ ...p, minVibeRating: p.minVibeRating === r ? null : r }))}
+                  />
+                ))}
+              </View>
+
+              <Divider style={{ marginVertical: space.md }} />
               <Label>Distance</Label>
               <View style={[ui.row, { gap: space.sm, marginTop: space.sm }]}>
                 {[1, 3, 5, 10].map((d) => (
@@ -346,7 +360,7 @@ export function FilterSheet({ visible, onClose }: { visible: boolean; onClose: (
             <Pressable
               onPress={() => {
                 resetFilters();
-                setDraft((p) => ({ ...p, verticals: [], categories: [], attributes: {}, priceTiers: [], minRating: null, openNow: false, openAt: null, maxDistanceMi: null }));
+                setDraft((p) => ({ ...p, verticals: [], categories: [], attributes: {}, priceTiers: [], minRating: null, minVibeRating: null, openNow: false, openAt: null, maxDistanceMi: null }));
               }}
               accessibilityRole="button"
               accessibilityLabel="Clear all filters"

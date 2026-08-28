@@ -28,10 +28,14 @@ function weightOf(r: Review, now: Date): number {
 
 export type Aggregate = {
   rating: number;
+  /** Vibe Rating (1-5 flames), weighted the same way as `rating` but averaged separately. */
+  vibeRating: number;
   count: number;
   /** Reviews excluded by the recommendation software. */
   filtered: number;
   distribution: [number, number, number, number, number];
+  /** Distribution of vibeRating, 1 to 5 flames — same shape as `distribution`. */
+  vibeDistribution: [number, number, number, number, number];
   subRatings: Partial<Record<SubRatingKey, number>>;
 };
 
@@ -44,15 +48,19 @@ export function aggregateFor(all: Review[], now: Date): Aggregate {
   const filtered = all.length - recommended.length;
 
   const distribution: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+  const vibeDistribution: [number, number, number, number, number] = [0, 0, 0, 0, 0];
   let wSum = 0;
+  let vibeWSum = 0;
   let wTotal = 0;
   const subAcc: Partial<Record<SubRatingKey, { sum: number; w: number }>> = {};
 
   for (const r of recommended) {
     const w = weightOf(r, now);
     wSum += r.rating * w;
+    vibeWSum += r.vibeRating * w;
     wTotal += w;
     distribution[Math.min(4, Math.max(0, r.rating - 1))] += 1;
+    vibeDistribution[Math.min(4, Math.max(0, r.vibeRating - 1))] += 1;
     for (const [k, v] of Object.entries(r.subRatings)) {
       if (typeof v !== 'number') continue;
       const key = k as SubRatingKey;
@@ -70,9 +78,11 @@ export function aggregateFor(all: Review[], now: Date): Aggregate {
 
   return {
     rating: wTotal > 0 ? Math.round((wSum / wTotal) * 10) / 10 : 0,
+    vibeRating: wTotal > 0 ? Math.round((vibeWSum / wTotal) * 10) / 10 : 0,
     count: recommended.length,
     filtered,
     distribution,
+    vibeDistribution,
     subRatings,
   };
 }
