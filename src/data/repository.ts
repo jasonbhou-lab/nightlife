@@ -1553,6 +1553,13 @@ function toAuthProfile(
  * `displayName` only takes effect the first time this email signs in —
  * `handle_new_user()` seeds `profiles.display_name` from it on account
  * creation and ignores it on every later code request for the same email.
+ *
+ * `emailRedirectTo` is the same deep link Google sign-in uses (see
+ * `signInWithGoogle` below). Whether the email Supabase actually sends
+ * contains a 6-digit code (`{{ .Token }}`) or a clickable link
+ * (`{{ .ConfirmationURL }}`) is decided entirely by the "Magic Link" email
+ * template in the Supabase dashboard, not by this call — this app's own UI
+ * supports both, so either template (or one with both) works.
  */
 export async function sendSignInCode(input: {
   email: string;
@@ -1561,7 +1568,10 @@ export async function sendSignInCode(input: {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is nowhere to send a code.' };
   const { error } = await supabase.auth.signInWithOtp({
     email: input.email,
-    options: { data: { display_name: input.displayName } },
+    options: {
+      data: { display_name: input.displayName },
+      emailRedirectTo: Linking.createURL('auth/callback'),
+    },
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
@@ -1584,6 +1594,24 @@ export async function verifySignInCode(input: {
   return { ok: true, profile: toAuthProfile(row) };
 }
 
+/** Shared tail of every flow that ends with a raw access/refresh token pair: Google OAuth and the emailed magic link both land here. */
+async function finishTokenSession(
+  access_token: string,
+  refresh_token: string,
+): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string }> {
+  if (!supabase) return { ok: false, error: 'No backend configured; there is no session to resume.' };
+  const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (error) return { ok: false, error: error.message };
+  if (!data.user) return { ok: false, error: 'Could not confirm that session.' };
+
+  const { data: row } = await supabase
+    .from('profiles')
+    .select('display_name, phone_verified, age_verified')
+    .eq('id', data.user.id)
+    .maybeSingle();
+  return { ok: true, profile: toAuthProfile(row) };
+}
+
 /**
  * Google sign-in, for both new and returning accounts alike — there is no
  * separate "sign up" here, the same way the email code above never has one:
@@ -1596,21 +1624,21 @@ export async function verifySignInCode(input: {
  * on iOS/Android is a real system-managed auth session, not just an
  * in-app webview), and Google's own consent screen and the OAuth client's
  * secret never pass through this app at all — both stay on Supabase's side.
- * `redirectTo` is a deep link back into this app; Supabase appends the
- * session as URL parameters when it sends the browser there, and
- * `expo-auth-session`'s `QueryParams` helper is what actually parses those
- * back out, since they can land in the URL fragment rather than the query
- * string and a plain `URL` parser here would miss that half.
+ * `redirectTo` is the same deep link the emailed magic link uses (see
+ * `completeAuthFromUrl` below); Supabase appends the session as URL
+ * parameters when it sends the browser there, and `expo-auth-session`'s
+ * `QueryParams` helper is what actually parses those back out, since they
+ * can land in the URL fragment rather than the query string and a plain
+ * `URL` parser here would miss that half.
  *
- * There is no PKCE code exchange and no global deep-link listener for a
- * cold-start return — this app's own client uses the implicit flow already
- * (see src/lib/supabase.ts), and `openAuthSessionAsync` already resolves
- * with the redirect URL itself once the browser session completes, so
- * nothing else needs to be watching for it. On web, this needs `expo start
- * --web --https` in development — the redirect's crypto-state check requires
- * the same origin the flow started from, which a plain `http://localhost`
- * dev server cannot satisfy; native and standalone/dev-client builds are not
- * affected.
+ * There is no PKCE code exchange here — this app's own client uses the
+ * implicit flow already (see src/lib/supabase.ts) — and
+ * `openAuthSessionAsync` already resolves with the redirect URL itself once
+ * the browser session completes, so this flow alone needs no deep-link
+ * listener. On web, this needs `expo start --web --https` in development —
+ * the redirect's crypto-state check requires the same origin the flow
+ * started from, which a plain `http://localhost` dev server cannot satisfy;
+ * native and standalone/dev-client builds are not affected.
  */
 export async function signInWithGoogle(): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is nowhere to sign in to.' };
@@ -1635,17 +1663,33 @@ export async function signInWithGoogle(): Promise<{ ok: true; profile: AuthProfi
   if (errorCode) return { ok: false, error: errorCode };
   const { access_token, refresh_token } = params;
   if (!access_token || !refresh_token) return { ok: false, error: 'Google did not return a session.' };
+  return finishTokenSession(access_token, refresh_token);
+}
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
-  if (sessionError) return { ok: false, error: sessionError.message };
-  if (!sessionData.user) return { ok: false, error: 'Could not confirm the Google account.' };
-
-  const { data: row } = await supabase
-    .from('profiles')
-    .select('display_name, phone_verified, age_verified')
-    .eq('id', sessionData.user.id)
-    .maybeSingle();
-  return { ok: true, profile: toAuthProfile(row) };
+/**
+ * Completes sign-in for the user who taps the magic-link email instead of
+ * typing the 6-digit code — the other half of `sendSignInCode`'s
+ * `emailRedirectTo`. Supabase verifies the link's token server-side and
+ * redirects the OS straight into this app via `nightout://auth/callback`
+ * with the session appended as URL parameters, the same shape Google's
+ * OAuth redirect uses, which is why this shares `finishTokenSession` with
+ * `signInWithGoogle` above.
+ *
+ * Unlike the Google flow, nothing in this app opened a browser session to
+ * capture that redirect URL — it arrives as a cold-start or foreground deep
+ * link instead, so `AppProvider` hands every incoming URL here
+ * unconditionally. Returns `null` for any URL that is not actually this
+ * callback (an ordinary in-app deep link, or a re-delivery of one already
+ * consumed), so the caller does not need to pre-filter.
+ */
+export async function completeAuthFromUrl(
+  url: string,
+): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string } | null> {
+  if (!hasBackend || !supabase) return null;
+  const { params, errorCode } = QueryParams.getQueryParams(url);
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) return errorCode ? { ok: false, error: errorCode } : null;
+  return finishTokenSession(access_token, refresh_token);
 }
 
 /** A snapshot of an already-signed-in session, read once at launch. */

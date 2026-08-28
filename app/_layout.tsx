@@ -54,6 +54,7 @@ function Shell() {
         <Stack.Screen name="claim/invite" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="moderation/index" />
         <Stack.Screen name="auth" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
+        <Stack.Screen name="auth/callback" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
       </Stack>
     </>

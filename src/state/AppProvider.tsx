@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
 import { useColorScheme } from 'react-native';
 
 import {
-  cancelBookingRemote, createMessageThread, getAuthSnapshot, getManagedVenueIds,
+  cancelBookingRemote, completeAuthFromUrl, createMessageThread, getAuthSnapshot, getManagedVenueIds,
   getPlatformRoles, getThreadMessages, onAuthSignedOut, sendMessage as sendMessageRemote,
   sendSignInCode as sendSignInCodeRemote, signInWithGoogle as signInWithGoogleRemote,
   signOutRemote, verifySignInCode as verifySignInCodeRemote, type AuthProfile,
@@ -103,6 +104,12 @@ type Ctx = {
    * what creates it, same as the email code's first-ever verification does.
    */
   signInWithGoogle: () => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Set when the user tapped the magic-link email and Supabase's redirect
+   * carried an error (expired or already-used link) instead of a session —
+   * read by app/auth/callback.tsx, the screen that redirect lands on.
+   */
+  authCallbackError: string | null;
   verifyAge: () => void;
   /** Returns 'ok' | 'soft_wall' | 'hard_wall'. */
   attemptContribution: () => 'ok' | 'soft_wall';
@@ -241,6 +248,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [clockOverride, setClockOverrideState] = useState<number | null>(null);
   const [managedVenueIds, setManagedVenueIds] = useState<string[]>([]);
   const [platformRoles, setPlatformRoles] = useState<PlatformRole[]>([]);
+  const [authCallbackError, setAuthCallbackError] = useState<string | null>(null);
 
   const persist = useCallback((key: string, value: unknown) => {
     AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {
@@ -353,6 +361,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPlatformRoles([]);
     });
   }, [persist]);
+
+  /**
+   * Finishes sign-in for the user who tapped the magic-link email instead of
+   * typing the 6-digit code. Unlike Google sign-in (which captures its own
+   * redirect by opening the browser itself), this URL arrives as a genuine
+   * OS deep link — a cold start via `getInitialURL`, or a foreground/
+   * background app via the `url` event — so every incoming URL is handed to
+   * `completeAuthFromUrl` unconditionally; it no-ops for anything that is not
+   * actually this callback. app/auth/callback.tsx is the screen expo-router
+   * lands on for `nightout://auth/callback` and reads `authCallbackError`
+   * while this resolves.
+   */
+  useEffect(() => {
+    if (!hasBackend) return;
+    const handle = async (url: string) => {
+      const result = await completeAuthFromUrl(url);
+      if (!result) return;
+      if (!result.ok) {
+        setAuthCallbackError(result.error);
+        return;
+      }
+      setAuthCallbackError(null);
+      applyAuthProfile(result.profile);
+      getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
+      getPlatformRoles().then(setPlatformRoles).catch(() => {});
+    };
+    Linking.getInitialURL().then((url) => {
+      if (url) handle(url);
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => handle(url));
+    return () => sub.remove();
+  }, [applyAuthProfile]);
 
   /* --------------------------------------------------------------- clock */
   const [tick, setTick] = useState(0);
@@ -800,6 +840,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       sendSignInCode,
       verifySignInCode,
       signInWithGoogle,
+      authCallbackError,
       verifyAge,
       attemptContribution,
       canBook: session.role === 'verified' || session.role === 'elite',
@@ -850,7 +891,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
-      verifySignInCode, signInWithGoogle, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
+      verifySignInCode, signInWithGoogle, authCallbackError, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
       addManagedVenue, platformRoles, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
