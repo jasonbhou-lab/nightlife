@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 02 (scoped), 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 03, 04, 05, 06, 07, 09, 11, 13, 15 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 03, 04, 05, 06, 07, 09, 10, 11, 13, 15 (each scoped down — see below) |
 | Trust & Safety | F-TRUST-01, 04, 06, 08 (scoped — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
@@ -408,17 +408,40 @@ reading the resulting blob back.
 
 **Offers and promotions** (`app/venue/offers.tsx`, F-BIZ-09, scoped). A self-published offer — a
 first-visit incentive, a no-cover window, a membership special — not a purchased placement:
-deliberately no budget, targeting, or ranking boost (F-BIZ-10 stays out of scope). This is the one
-F-BIZ feature built as its own table with real RLS rather than another jsonb-diff venue-write
-guard, since an offer is naturally a list with a lifecycle — created, expires, removed early — not
-one blob a business rewrites wholesale, the same shape as photos and business_invites. Carries the
-same per-jurisdiction drink-pricing disclaimer the happy-hour editor already showed, since alcohol
-and tobacco promotion rules vary by state and this build doesn't attempt to enforce them. Verified
-directly against the database before building the client at all: a throwaway owner account could
-post and edit an offer, an unrelated account's edit attempt silently touched nothing, an unrelated
-account's insert attempt hard-failed, and an anonymous read saw the same row — all inside a rolled-
-back transaction, the same technique that had already caught two real bugs in earlier F-BIZ
-migrations.
+deliberately no budget, targeting, or ranking boost of its own (see F-BIZ-10 below for the actual
+purchased-placement path). This is the one F-BIZ feature built as its own table with real RLS
+rather than another jsonb-diff venue-write guard, since an offer is naturally a list with a
+lifecycle — created, expires, removed early — not one blob a business rewrites wholesale, the same
+shape as photos and business_invites. Carries the same per-jurisdiction drink-pricing disclaimer
+the happy-hour editor already showed, since alcohol and tobacco promotion rules vary by state and
+this build doesn't attempt to enforce them. Verified directly against the database before building
+the client at all: a throwaway owner account could post and edit an offer, an unrelated account's
+edit attempt silently touched nothing, an unrelated account's insert attempt hard-failed, and an
+anonymous read saw the same row — all inside a rolled-back transaction, the same technique that
+had already caught two real bugs in earlier F-BIZ migrations.
+
+**Advertising** (`app/venue/advertising.tsx`, `src/lib/advertising.ts`, F-BIZ-10, scoped). Replaced
+what `venues.promoted` actually was before this: a static boolean with no business-facing write
+path at all — nothing in this build ever set it except the seed, so "paid placement" had no
+purchase, no schedule, and no way to ever turn itself off. A business now schedules a real campaign
+instead: budget tier, a date range, and optional daypart targeting are all real — a venue is only
+pinned and labeled as a paid placement within its own campaign's dates and, if set, its targeted
+dayparts (morning/afternoon/evening/late night, the exact buckets F-BIZ-08's traffic chart already
+uses — both now read from one shared definition in `src/lib/daypart.ts` rather than two that could
+drift). Whether a venue is *currently* promoted is never stored; it's computed against `now` at
+read time (`isPromotedNow`), the same pattern `venueState` and happy-hour windows already use,
+because nothing in this build could flip a stored flag the instant a date or daypart boundary
+passes. Geography targeting (`targetNeighborhoods`) is collected and shown back to the business but
+does not change ranking or visibility — this build has no per-request geo-serving engine, and a
+venue's own neighborhood already determines which searches it can appear in at all, so narrowing
+further would be a UI promise the backend can't keep. No payment is captured: `budgetTier` only
+picks which published flat price was disclosed before submission, the same disclosed-not-charged
+treatment F-BOOK-11's deposit terms already get. Creative management is one optional headline
+shown in place of the venue's tagline while a campaign runs, not new asset upload — F-BIZ-06's
+photo management already covers a venue's images. Performance reporting reuses F-BIZ-08's existing
+`venue_events` log filtered to the campaign's own date range rather than a second tracking system.
+The two venues that used to carry the bare `promoted` flag were reseeded as real campaigns so
+existing demo behavior didn't just disappear when the column was dropped.
 
 **Moderation queue and Trust & Safety tools** (`app/moderation/index.tsx`, `app/venue/[id].tsx`'s
 Trust & Safety card, F-TRUST, scoped). Before this, "Report this review" was a local
@@ -510,7 +533,7 @@ Postgres happened to return, not a real sort.
 - **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
   the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
-  claimed/unclaimed states, closure and successor handling. Fourteen exceptions are real, scoped-down
+  claimed/unclaimed states, closure and successor handling. Fifteen exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
   (self-attestation gated behind admin approval, not the PRD's actual multi-path verification),
   F-BIZ-02's ownership transfer (cooperative, via invite) and dispute (adversarial, via the same
@@ -524,12 +547,13 @@ Postgres happened to return, not a real sort.
   F-BIZ-08's analytics dashboard (profile views, click-throughs, daypart traffic, a rating trend, and
   a rating-only competitor benchmark — no search impressions, funnel, website/order click-through, or
   view-count benchmarking), F-BIZ-09's offers (self-published only — no budget, targeting, or
-  ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-11's reservation and waitlist
-  console (no floor map, real-time table-tier status, or staff assignment), F-BIZ-13's
-  invite-a-manager flow (manager/staff only, no access audit log), and F-BIZ-15's own-data export
-  (reviews and media, not the new analytics — that lives in its own dashboard, not the export file —
-  and not the team roster). Everything else — the typed attributes themselves beyond a cover flag,
-  advertising, and the rest of F-BIZ-10, 12, and 14 — has no dashboard here at all. F-TRUST is a
+  ranking boost, and no per-jurisdiction pricing enforcement), F-BIZ-10's advertising (budget tier and
+  daypart targeting are real; geography targeting is collected but not enforced, and no payment is
+  captured), F-BIZ-11's reservation and waitlist console (no floor map, real-time table-tier status,
+  or staff assignment), F-BIZ-13's invite-a-manager flow (manager/staff only, no access audit log),
+  and F-BIZ-15's own-data export (reviews and media, not the new analytics — that lives in its own
+  dashboard, not the export file — and not the team roster). Everything else — the typed attributes
+  themselves beyond a cover flag, and F-BIZ-12 and 14 — has no dashboard here at all. F-TRUST is a
   partial exception of
   its own now — see
   *Moderation queue and Trust & Safety tools* above — covering a reviews report queue and Consumer

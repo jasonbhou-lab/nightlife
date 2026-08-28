@@ -1,4 +1,5 @@
 import { attributeByKey } from '@/data/attributes';
+import { isPromotedNow } from '@/lib/advertising';
 import { isOpenAt, venueState } from '@/lib/hours';
 import type { AttributeValue, FilterState, SortKey, Venue, Vertical } from '@/types';
 
@@ -248,8 +249,8 @@ export function searchVenues(f: FilterState, now: Date, pool: Venue[]): SearchRe
   const matched = searchable.filter(passes);
   const sorted = matched.slice().sort(comparator(f.sort, f, now));
 
-  const promoted = sorted.filter((v) => v.promoted);
-  const organic = sorted.filter((v) => !v.promoted);
+  const promoted = sorted.filter((v) => isPromotedNow(v.adCampaigns, now));
+  const organic = sorted.filter((v) => !isPromotedNow(v.adCampaigns, now));
 
   let relaxations: SearchResult['relaxations'] = [];
   let adjacentCategories: Vertical[] = [];

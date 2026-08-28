@@ -7,6 +7,7 @@ import { AdLabel, Card, IconBadge, styles as ui } from '@/components/ui';
 import { Flames } from '@/components/Flames';
 import { Stars } from '@/components/Stars';
 import { verticalMeta } from '@/data/taxonomy';
+import { activeCampaign } from '@/lib/advertising';
 import { decisionChips } from '@/lib/decide';
 import { categoryLine, priceLabel } from '@/lib/format';
 import { formatDuration, venueState } from '@/lib/hours';
@@ -38,6 +39,7 @@ export function VenueCard({
   const state = venueState(venue, now);
   const chips = decisionChips(venue, now, compact ? 2 : 3);
   const saved = isSaved(venue.id);
+  const campaign = activeCampaign(venue.adCampaigns, now);
 
   /**
    * The bookmark button used to sit inside `Card`'s own onPress Pressable,
@@ -59,9 +61,14 @@ export function VenueCard({
         accessibilityLabel={`${venue.name}, ${venue.primary.category}, rated ${venue.rating} from ${venue.reviewCount} reviews, vibe rating ${venue.vibeRating}, ${state.label}`}
         style={({ pressed }) => [{ padding: space.lg }, pressed && { opacity: 0.9 }]}
       >
-      {venue.promoted ? (
-        <View style={{ marginBottom: space.sm }}>
+      {campaign ? (
+        <View style={{ marginBottom: space.sm, gap: 4 }}>
           <AdLabel />
+          {campaign.headline ? (
+            <Text style={[font.small, { color: theme.textDim }]} numberOfLines={1}>
+              {campaign.headline}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 

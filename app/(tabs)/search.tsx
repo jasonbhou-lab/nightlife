@@ -13,6 +13,7 @@ import {
 import { attributeByKey } from '@/data/attributes';
 import { useCatalogue } from '@/data/catalogue';
 import { verticalMeta } from '@/data/taxonomy';
+import { isPromotedNow } from '@/lib/advertising';
 import { formatAttribute } from '@/lib/format';
 import { activeFilterCount, parseNaturalQuery, searchVenues, suggest, type Suggestion } from '@/lib/search';
 import { detectVibe, rankByVibe, vibeDefs, type VibeDef } from '@/lib/vibes';
@@ -67,9 +68,9 @@ export default function SearchScreen() {
   const vibeResults = useMemo(
     () =>
       activeVibe
-        ? rankByVibe(search.results.filter((v) => !v.promoted), reviewsByVenue, activeVibe)
+        ? rankByVibe(search.results.filter((v) => !isPromotedNow(v.adCampaigns, now)), reviewsByVenue, activeVibe)
         : null,
-    [activeVibe, search.results, reviewsByVenue],
+    [activeVibe, search.results, reviewsByVenue, now],
   );
 
   const count = activeFilterCount(filters);

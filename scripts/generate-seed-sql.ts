@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { events } from '../src/data/events';
 import { reviews } from '../src/data/reviews';
 import { venues } from '../src/data/venues';
-import type { Review, Venue } from '../src/types';
+import type { AdCampaign, Review, Venue } from '../src/types';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outPath = join(here, '..', 'supabase', 'seed.sql');
@@ -43,6 +43,18 @@ function j(v: unknown): string {
 function arr(v: string[] | undefined): string {
   if (!v || v.length === 0) return `'{}'::text[]`;
   return `ARRAY[${v.map(q).join(', ')}]::text[]`;
+}
+
+/** Nullable text[] literal -- NULL (not '{}') means "no restriction", for ad_campaigns targeting. */
+function nullableArr(v: string[] | undefined): string {
+  if (!v || v.length === 0) return 'NULL';
+  return `ARRAY[${v.map(q).join(', ')}]::text[]`;
+}
+
+/** Nullable enum[] literal -- same NULL-means-unrestricted convention as nullableArr. */
+function nullableEnumArr(v: string[] | undefined, type: string): string {
+  if (!v || v.length === 0) return 'NULL';
+  return `ARRAY[${v.map(q).join(', ')}]::${type}[]`;
 }
 
 function enumArr(v: string[] | undefined, type: string): string {
@@ -104,7 +116,6 @@ const venueRow = (v: Venue, withSuccessor: boolean) => `(
   ${v.closure ? q(v.closure.note) : 'NULL'},
   ${withSuccessor && v.closure?.successorId ? q(v.closure.successorId) : 'NULL'},
   ${q(v.consumerAlert)},
-  ${b(v.promoted ?? false)},
   ${q(v.tagline)},
   ${q(v.about)},
   ${j(v.attributes)},
@@ -127,7 +138,7 @@ const venueCols = `insert into venues (
   id, name, alternate_names, primary_vertical, primary_category, secondary,
   price_tier, neighborhood, address, map_x, map_y, phone, website, rating,
   vibe_rating, review_count, claimed, verified, opened_year, closure_state, closure_note,
-  closure_successor_id, consumer_alert, promoted, tagline, about, attributes,
+  closure_successor_id, consumer_alert, tagline, about, attributes,
   attribute_meta, default_source, default_updated_at, schedules, happy_hours,
   photos, menus, qa, sub_rating_averages, busyness, booking_modes, booking_terms,
   avg_response_minutes
@@ -155,7 +166,6 @@ const VENUE_UPSERT = `on conflict (id) do update set
   closure_state = excluded.closure_state,
   closure_note = excluded.closure_note,
   consumer_alert = excluded.consumer_alert,
-  promoted = excluded.promoted,
   tagline = excluded.tagline,
   about = excluded.about,
   attributes = excluded.attributes,
@@ -189,6 +199,36 @@ if (moved.length) {
       `update venues set closure_successor_id = ${q(v.closure!.successorId!)} where id = ${q(v.id)};`,
     );
   }
+  lines.push('');
+}
+
+/* -------------------------------------------------------------- ad campaigns */
+
+const campaigns: { v: Venue; c: AdCampaign }[] = venues.flatMap((v) =>
+  (v.adCampaigns ?? []).map((c) => ({ v, c })),
+);
+if (campaigns.length) {
+  lines.push('-- Paid placements (F-BIZ-10). The seed_key is a stable natural key so');
+  lines.push('-- re-running is idempotent, the same shape as reviews.seed_key.');
+  lines.push(
+    'insert into ad_campaigns (seed_key, venue_id, starts_on, ends_on, budget_tier, target_neighborhoods, target_dayparts, headline) values',
+  );
+  lines.push(
+    campaigns
+      .map(
+        ({ v, c }) =>
+          `  (${q(c.id)}, ${q(v.id)}, ${q(c.startsOn)}::date, ${q(c.endsOn)}::date, ${q(c.budgetTier)}::ad_budget_tier, ${nullableArr(c.targetNeighborhoods)}, ${nullableEnumArr(c.targetDayparts, 'ad_daypart')}, ${q(c.headline)})`,
+      )
+      .join(',\n'),
+  );
+  lines.push(`on conflict (seed_key) do update set
+  venue_id = excluded.venue_id,
+  starts_on = excluded.starts_on,
+  ends_on = excluded.ends_on,
+  budget_tier = excluded.budget_tier,
+  target_neighborhoods = excluded.target_neighborhoods,
+  target_dayparts = excluded.target_dayparts,
+  headline = excluded.headline;`);
   lines.push('');
 }
 
@@ -330,7 +370,7 @@ writeFileSync(outPath, lines.join('\n'), 'utf8');
 
 const shortBodies = reviews.filter((r) => r.text.trim().length < 60);
 console.log(`Wrote ${outPath}`);
-console.log(`  ${venues.length} venues, ${tiers.length} table tiers, ${events.length} events, ${reviews.length} reviews`);
+console.log(`  ${venues.length} venues, ${tiers.length} table tiers, ${events.length} events, ${reviews.length} reviews, ${campaigns.length} ad campaigns`);
 if (shortBodies.length) {
   // Expected. These are the low-effort spam reviews the recommendation software
   // is meant to catch. The 60-character floor is enforced on client submissions

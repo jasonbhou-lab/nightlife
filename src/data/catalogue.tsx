@@ -5,7 +5,7 @@ import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import type {
-  HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent, VenueOffer,
+  AdCampaign, HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent, VenueOffer,
 } from '@/types';
 
 /**
@@ -82,6 +82,13 @@ type CatalogueCtx = {
    */
   addVenueOffer: (venueId: string, offer: VenueOffer) => void;
   removeVenueOffer: (venueId: string, offerId: string) => void;
+  /**
+   * F-BIZ-10: reflect a just-scheduled or -cancelled ad campaign in this
+   * session without waiting on a full `reload()`. See
+   * repository.createAdCampaign / cancelAdCampaign.
+   */
+  addAdCampaign: (venueId: string, campaign: AdCampaign) => void;
+  removeAdCampaign: (venueId: string, campaignId: string) => void;
   /**
    * F-TRUST-01: reflect a just-moderated review (removed or restored) in this
    * session without waiting on a full `reload()`. See repository.moderateReport
@@ -190,6 +197,22 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const addAdCampaign = useCallback((venueId: string, campaign: AdCampaign) => {
+    setVenues((prev) =>
+      prev.map((v) => (v.id === venueId ? { ...v, adCampaigns: [...(v.adCampaigns ?? []), campaign] } : v)),
+    );
+  }, []);
+
+  const removeAdCampaign = useCallback((venueId: string, campaignId: string) => {
+    setVenues((prev) =>
+      prev.map((v) =>
+        v.id === venueId
+          ? { ...v, adCampaigns: (v.adCampaigns ?? []).filter((c) => c.id !== campaignId) }
+          : v,
+      ),
+    );
+  }, []);
+
   const setReviewRecommended = useCallback((reviewId: string, recommended: boolean) => {
     setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, recommended } : r)));
   }, []);
@@ -284,6 +307,8 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setVenueReviewAlertThreshold,
       addVenueOffer,
       removeVenueOffer,
+      addAdCampaign,
+      removeAdCampaign,
       setReviewRecommended,
       setVenueConsumerAlert,
       setVenueContributionFrozen,
@@ -294,6 +319,7 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
       setVenueMenus, setVenueListing, setVenueReviewAlertThreshold, addVenueOffer, removeVenueOffer,
+      addAdCampaign, removeAdCampaign,
       setReviewRecommended, setVenueConsumerAlert, setVenueContributionFrozen, setVenuePhotoCover,
       setVenuePhotoOrder,
     ],

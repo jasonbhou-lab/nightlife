@@ -1,3 +1,4 @@
+import { DAYPART_DEFS } from '@/lib/daypart';
 import type { Review, Venue, VenueAnalyticsEvent, VenueEventKind } from '@/types';
 
 /**
@@ -8,13 +9,6 @@ import type { Review, Venue, VenueAnalyticsEvent, VenueEventKind } from '@/types
  */
 
 const RECENT_DAYS = 14;
-
-const DAYPARTS: { label: string; test: (hour: number) => boolean }[] = [
-  { label: 'Morning (5–11a)', test: (h) => h >= 5 && h < 11 },
-  { label: 'Afternoon (11a–5p)', test: (h) => h >= 11 && h < 17 },
-  { label: 'Evening (5–9p)', test: (h) => h >= 17 && h < 21 },
-  { label: 'Late night (9p–5a)', test: (h) => h >= 21 || h < 5 },
-];
 
 export type EventSummary = {
   totalViews: number;
@@ -36,7 +30,7 @@ export function summarizeEvents(events: VenueAnalyticsEvent[], now: Date): Event
     dayBuckets.set(d.toISOString().slice(0, 10), 0);
   }
 
-  const daypartCounts = DAYPARTS.map(() => 0);
+  const daypartCounts = DAYPART_DEFS.map(() => 0);
 
   for (const e of events) {
     if (e.kind === 'view') {
@@ -44,7 +38,7 @@ export function summarizeEvents(events: VenueAnalyticsEvent[], now: Date): Event
       const dayKey = e.createdAt.slice(0, 10);
       if (dayBuckets.has(dayKey)) dayBuckets.set(dayKey, (dayBuckets.get(dayKey) ?? 0) + 1);
       const hour = new Date(e.createdAt).getHours();
-      const idx = DAYPARTS.findIndex((d) => d.test(hour));
+      const idx = DAYPART_DEFS.findIndex((d) => d.test(hour));
       if (idx >= 0) daypartCounts[idx] += 1;
     } else {
       clicksByKind[e.kind] = (clicksByKind[e.kind] ?? 0) + 1;
@@ -55,7 +49,7 @@ export function summarizeEvents(events: VenueAnalyticsEvent[], now: Date): Event
     totalViews,
     clicksByKind,
     viewsByDay: Array.from(dayBuckets.entries()).map(([date, count]) => ({ date, count })),
-    viewsByDaypart: DAYPARTS.map((d, i) => ({ label: d.label, count: daypartCounts[i] })),
+    viewsByDaypart: DAYPART_DEFS.map((d, i) => ({ label: d.label, count: daypartCounts[i] })),
   };
 }
 

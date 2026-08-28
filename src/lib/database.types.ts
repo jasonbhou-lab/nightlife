@@ -43,6 +43,8 @@ export type ModerationActionKindEnum =
   | 'consumer_alert_applied' | 'consumer_alert_cleared'
   | 'contribution_frozen' | 'contribution_unfrozen';
 export type VenueEventKindEnum = 'view' | 'click_call' | 'click_directions' | 'click_book';
+export type AdDaypartEnum = 'morning' | 'afternoon' | 'evening' | 'late_night';
+export type AdBudgetTierEnum = 'starter' | 'growth' | 'spotlight';
 
 export type VenueRow = {
   id: string;
@@ -70,7 +72,6 @@ export type VenueRow = {
   closure_note: string | null;
   closure_successor_id: string | null;
   consumer_alert: string | null;
-  promoted: boolean;
   tagline: string | null;
   about: string | null;
   attributes: Json;
@@ -272,6 +273,20 @@ export type VenueOfferRow = {
   created_at: string;
 };
 
+export type AdCampaignRow = {
+  id: string;
+  seed_key: string | null;
+  venue_id: string;
+  starts_on: string;
+  ends_on: string;
+  budget_tier: AdBudgetTierEnum;
+  target_neighborhoods: string[] | null;
+  target_dayparts: AdDaypartEnum[] | null;
+  headline: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type BusinessInviteRow = {
   id: string;
   venue_id: string;
@@ -440,6 +455,15 @@ export type Database = {
         Row: VenueOfferRow;
         Insert: Insertable<VenueOfferRow, 'id' | 'starts_at' | 'ends_at' | 'created_at'>;
         Update: Partial<VenueOfferRow>;
+        Relationships: [];
+      };
+      ad_campaigns: {
+        Row: AdCampaignRow;
+        Insert: Insertable<
+          AdCampaignRow,
+          'id' | 'seed_key' | 'target_neighborhoods' | 'target_dayparts' | 'headline' | 'created_by' | 'created_at'
+        >;
+        Update: Partial<AdCampaignRow>;
         Relationships: [];
       };
       message_threads: {

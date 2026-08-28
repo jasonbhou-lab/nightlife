@@ -434,7 +434,18 @@ export const venues: Venue[] = [
     reviewCount: 988,
     claimed: true,
     verified: true,
-    promoted: true,
+    adCampaigns: [
+      {
+        id: 'ac-kirby3-1',
+        venueId: 'kirby3',
+        startsOn: '2026-08-01',
+        endsOn: '2026-12-31',
+        budgetTier: 'growth',
+        targetDayparts: ['evening', 'late_night'],
+        headline: 'Reserve your booth for kickoff — Texans and Astros on every screen.',
+        createdAt: '2026-08-01T00:00:00Z',
+      },
+    ],
     tagline: '28 screens, sound on for Texans and Astros, and a booth you can actually reserve',
     about:
       'Purpose-built sports bar. Sound follows the Texans and Astros; every other game is captioned. ' +
@@ -892,7 +903,19 @@ export const venues: Venue[] = [
     reviewCount: 471,
     claimed: true,
     verified: true,
-    promoted: true,
+    adCampaigns: [
+      {
+        id: 'ac-zafeera-1',
+        venueId: 'zafeera',
+        startsOn: '2026-08-01',
+        endsOn: '2026-12-31',
+        budgetTier: 'spotlight',
+        targetNeighborhoods: ['Westchase', 'Montrose', 'Downtown'],
+        targetDayparts: ['late_night'],
+        headline: '46 shisha flavors. No cover before 11.',
+        createdAt: '2026-08-01T00:00:00Z',
+      },
+    ],
     tagline: '46 shisha flavors, open to 3 AM, no cover before 11',
     about: 'Hookah lounge with a covered patio, late kitchen, and DJ Thursday through Sunday.',
     schedules: [

@@ -86,8 +86,9 @@ export type HappyHourWindow = {
 
 /**
  * F-BIZ-09, scoped: a self-published offer, not a purchased placement —
- * there is no budget, targeting, or ranking boost attached (F-BIZ-10 is out
- * of scope). `endsAt` absent means ongoing rather than time-boxed.
+ * there is no budget, targeting, or ranking boost attached. See `AdCampaign`
+ * below for the actual purchased-placement path (F-BIZ-10). `endsAt` absent
+ * means ongoing rather than time-boxed.
  */
 export type VenueOffer = {
   id: string;
@@ -96,6 +97,36 @@ export type VenueOffer = {
   description: string;
   startsAt: string;
   endsAt?: string;
+  createdAt: string;
+};
+
+/** F-BIZ-08's traffic-by-daypart buckets, reused by F-BIZ-10's daypart targeting so both agree on what "evening" means. */
+export type Daypart = 'morning' | 'afternoon' | 'evening' | 'late_night';
+
+export type AdBudgetTier = 'starter' | 'growth' | 'spotlight';
+
+/**
+ * F-BIZ-10, scoped: a business schedules a paid placement for its own venue.
+ * Budget tier and date range are real — a campaign is a paid placement only
+ * within `startsOn`..`endsOn` — and daypart targeting is real, checked
+ * against the clock (see `src/lib/advertising.ts`). Geography
+ * (`targetNeighborhoods`) and category targeting are collected and shown
+ * back to the business but do not change ranking or visibility: a venue's
+ * own neighborhood and category already determine which searches it can
+ * appear in, and this build has no per-request geo/category ad-serving
+ * engine to narrow that further. `budgetTier` maps to a published flat
+ * price shown before submission — no payment is captured, the same
+ * disclosed-not-charged treatment as booking deposit terms (F-BOOK-11).
+ */
+export type AdCampaign = {
+  id: string;
+  venueId: string;
+  startsOn: string;
+  endsOn: string;
+  budgetTier: AdBudgetTier;
+  targetNeighborhoods?: string[];
+  targetDayparts?: Daypart[];
+  headline?: string;
   createdAt: string;
 };
 
@@ -378,13 +409,18 @@ export type Venue = {
   consumerAlert?: string;
   /** F-TRUST-04 / R12: Trust & Safety can freeze new reviews on a listing. */
   contributionFrozen?: boolean;
-  /** Paid placement. Always labeled (F-SEARCH-09, U-11). */
-  promoted?: boolean;
   tagline: string;
   about: string;
   schedules: Schedule[];
   happyHours?: HappyHourWindow[];
   offers?: VenueOffer[];
+  /**
+   * F-BIZ-10: purchased placements scheduled for this venue. Whether the
+   * venue is *currently* a paid placement is not stored — it's computed from
+   * this list against `now` via `isPromotedNow` (src/lib/advertising.ts),
+   * always labeled when active (F-SEARCH-09, U-11).
+   */
+  adCampaigns?: AdCampaign[];
   attributes: Record<string, AttributeValue>;
   /** Per-attribute provenance. Falls back to `defaultMeta` when absent. */
   meta: Record<string, AttributeMeta>;

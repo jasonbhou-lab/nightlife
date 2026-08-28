@@ -6,6 +6,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { Button, Card, styles as ui } from '@/components/ui';
 import { verticalMeta } from '@/data/taxonomy';
+import { isPromotedNow } from '@/lib/advertising';
 import { priceLabel } from '@/lib/format';
 import { venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -149,7 +150,7 @@ export function MiniMap({
                     width: isSel ? 38 : 32,
                     height: isSel ? 38 : 32,
                     borderRadius: 19,
-                    backgroundColor: v.promoted ? theme.inset : open ? theme.accent : theme.textFaint,
+                    backgroundColor: isPromotedNow(v.adCampaigns, now) ? theme.inset : open ? theme.accent : theme.textFaint,
                     borderWidth: 2,
                     borderColor: '#FFFFFF',
                     alignItems: 'center',

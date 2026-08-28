@@ -18,6 +18,7 @@ import {
   logVenueEvent, requestPhotoRemoval, setConsumerAlert, setContributionFrozen,
 } from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
+import { isPromotedNow } from '@/lib/advertising';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { exportVenueData } from '@/lib/export';
 import { actionsFor, categoryLine, freshness, metaFor, priceLabel, relativeDate } from '@/lib/format';
@@ -102,12 +103,12 @@ export default function VenueProfile() {
           (v) =>
             v.id !== venue.id &&
             !v.closure &&
-            !v.promoted &&
+            !isPromotedNow(v.adCampaigns, now) &&
             verticalsOf(v).some((x) => verticalsOf(venue).includes(x)),
         )
         .sort((a, b) => Math.abs(a.priceTier - venue.priceTier) - Math.abs(b.priceTier - venue.priceTier) || b.rating - a.rating)
         .slice(0, 2),
-    [venues, venue],
+    [venues, venue, now],
   );
 
   const runAction = (key: string) => {
@@ -392,7 +393,7 @@ export default function VenueProfile() {
       {/* Header card: rating, price, open state, and primary actions. */}
       <View style={gutter()}>
         <Card>
-          {venue.promoted ? (
+          {isPromotedNow(venue.adCampaigns, now) ? (
             <View style={{ marginBottom: space.md }}>
               <AdLabel />
             </View>
@@ -1015,6 +1016,17 @@ export default function VenueProfile() {
               >
                 <Ionicons name="bar-chart" size={18} color={theme.accent} />
                 <Text style={[font.body, { color: theme.text, flex: 1 }]}>Analytics</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
+              </Pressable>
+              <Divider />
+              <Pressable
+                onPress={() => router.push(`/venue/advertising?venueId=${venue.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel="Manage advertising"
+                style={[ui.row, { gap: space.md, minHeight: 44 }]}
+              >
+                <Ionicons name="megaphone" size={18} color={theme.accent} />
+                <Text style={[font.body, { color: theme.text, flex: 1 }]}>Advertising</Text>
                 <Ionicons name="chevron-forward" size={16} color={theme.textFaint} />
               </Pressable>
               <Divider />

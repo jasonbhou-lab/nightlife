@@ -13,12 +13,12 @@ import { hasBackend, supabase } from '@/lib/supabase';
  */
 WebBrowser.maybeCompleteAuthSession();
 import type {
-  BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow, EventRow,
-  MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
+  AdCampaignRow, BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow,
+  EventRow, MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
   VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  Booking, BusinessInvite, BusinessReplyTemplate, ClaimableBusinessRole, ContentReport,
+  AdCampaign, Booking, BusinessInvite, BusinessReplyTemplate, ClaimableBusinessRole, ContentReport,
   HappyHourWindow, InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction,
   Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueClaim,
   VenueClaimStatus, VenueEvent, VenueEventKind, VenueOffer,
@@ -100,7 +100,6 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
       : undefined,
     consumerAlert: row.consumer_alert ?? undefined,
     contributionFrozen: row.contribution_frozen || undefined,
-    promoted: row.promoted || undefined,
     tagline: row.tagline ?? '',
     about: row.about ?? '',
     schedules: asArray(row.schedules),
@@ -191,6 +190,20 @@ function mapVenueOffer(row: VenueOfferRow): VenueOffer {
     description: row.description,
     startsAt: row.starts_at,
     endsAt: row.ends_at ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function mapAdCampaign(row: AdCampaignRow): AdCampaign {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on,
+    budgetTier: row.budget_tier,
+    targetNeighborhoods: row.target_neighborhoods?.length ? row.target_neighborhoods : undefined,
+    targetDayparts: row.target_dayparts?.length ? row.target_dayparts : undefined,
+    headline: row.headline ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -361,7 +374,7 @@ export async function loadCatalogue(
   if (!hasBackend || !supabase) return seedCatalogue;
 
   try {
-    const [venuesRes, tiersRes, eventsRes, reviewsRes, photosRes, offersRes] = await Promise.all([
+    const [venuesRes, tiersRes, eventsRes, reviewsRes, photosRes, offersRes, campaignsRes] = await Promise.all([
       supabase.from('venues').select('*'),
       supabase.from('table_tiers').select('*'),
       supabase.from('events').select('*'),
@@ -373,10 +386,12 @@ export async function loadCatalogue(
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true }),
       supabase.from('venue_offers').select('*'),
+      supabase.from('ad_campaigns').select('*'),
     ]);
 
     const firstError =
-      venuesRes.error ?? tiersRes.error ?? eventsRes.error ?? reviewsRes.error ?? photosRes.error ?? offersRes.error;
+      venuesRes.error ?? tiersRes.error ?? eventsRes.error ?? reviewsRes.error ?? photosRes.error ??
+      offersRes.error ?? campaignsRes.error;
     if (firstError) throw new Error(firstError.message);
 
     const venueRows = venuesRes.data ?? [];
@@ -437,8 +452,19 @@ export async function loadCatalogue(
       return offers?.length ? { ...v, offers } : v;
     });
 
+    const campaignsByVenue = new Map<string, AdCampaign[]>();
+    for (const row of campaignsRes.data ?? []) {
+      const list = campaignsByVenue.get(row.venue_id) ?? [];
+      list.push(mapAdCampaign(row));
+      campaignsByVenue.set(row.venue_id, list);
+    }
+    const withCampaigns = withOffers.map((v) => {
+      const adCampaigns = campaignsByVenue.get(v.id);
+      return adCampaigns?.length ? { ...v, adCampaigns } : v;
+    });
+
     return {
-      venues: withDistances(withOffers, origin, rowsById),
+      venues: withDistances(withCampaigns, origin, rowsById),
       events: (eventsRes.data ?? []).map(mapEvent),
       reviews: (reviewsRes.data ?? []).map(mapReview),
       source: 'remote',
@@ -1105,6 +1131,52 @@ export async function createVenueOffer(input: {
 export async function deleteVenueOffer(offerId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to remove.' };
   const { error } = await supabase.from('venue_offers').delete().eq('id', offerId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * F-BIZ-10 (scoped): schedule a paid placement — see the migration header on
+ * 20260828140000_add_ad_campaigns.sql for what is and is not real about
+ * targeting here. No payment is captured; `budgetTier` only picks which
+ * published flat price was disclosed before submission.
+ */
+export async function createAdCampaign(input: {
+  venueId: string;
+  startsOn: string;
+  endsOn: string;
+  budgetTier: AdCampaign['budgetTier'];
+  targetNeighborhoods?: string[];
+  targetDayparts: AdCampaign['targetDayparts'];
+  headline?: string;
+}): Promise<{ ok: true; campaign: AdCampaign } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; the campaign could not be scheduled.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to schedule a campaign.' };
+
+  const { data, error } = await supabase
+    .from('ad_campaigns')
+    .insert({
+      venue_id: input.venueId,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      budget_tier: input.budgetTier,
+      target_neighborhoods: input.targetNeighborhoods?.length ? input.targetNeighborhoods : null,
+      target_dayparts: input.targetDayparts?.length ? input.targetDayparts : null,
+      headline: input.headline || null,
+      created_by: user.id,
+    })
+    .select('*')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, campaign: mapAdCampaign(data) };
+}
+
+/** Cancel a campaign that has not started yet — the database rejects cancelling one already running. */
+export async function cancelAdCampaign(campaignId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to cancel.' };
+  const { error } = await supabase.from('ad_campaigns').delete().eq('id', campaignId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
