@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 
 import { VenueCard } from '@/components/VenueCard';
 import {
@@ -83,6 +83,15 @@ export default function HomeScreen() {
 
   return (
     <Screen contentStyle={{ gap: space.xl }}>
+      <View style={gutter()}>
+        <Image
+          source={require('../../assets/kulture-wordmark.png')}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+          style={{ width: 126, height: 26, alignSelf: 'flex-start' }}
+        />
+      </View>
+
       {/* Top bar: avatar left, circular action right. */}
       <View style={[ui.row, gutter()]}>
         <View
