@@ -85,7 +85,11 @@ export default function HomeScreen() {
     <Screen contentStyle={{ gap: space.xl }}>
       <View style={gutter()}>
         <Image
-          source={require('../../assets/kulture-wordmark.png')}
+          source={
+            theme.mode === 'dark'
+              ? require('../../assets/kulture-wordmark-dark.png')
+              : require('../../assets/kulture-wordmark.png')
+          }
           resizeMode="contain"
           accessibilityIgnoresInvertColors
           style={{ width: 126, height: 26, alignSelf: 'flex-start' }}
