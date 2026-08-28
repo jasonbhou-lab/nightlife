@@ -394,8 +394,9 @@ export type Venue = {
   address: string;
   /** Straight-line distance from the user in miles, precomputed for the demo. */
   distanceMi: number;
-  /** Normalized position on the demo map, 0..1. */
-  map: { x: number; y: number };
+  /** Real coordinates, used by MiniMap.web.tsx / MiniMap.native.tsx (F-SEARCH-03). */
+  lat: number;
+  lng: number;
   phone: string;
   website?: string;
   rating: number;

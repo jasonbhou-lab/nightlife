@@ -129,6 +129,54 @@ every venue. Selecting a vertical narrows which subcategories show, same discipl
 category-aware filter here; deselecting one drops any now-irrelevant picks rather than leaving a
 stale, invisible filter active.
 
+**Google Maps** (`src/components/MiniMap.web.tsx`, `MiniMap.native.tsx`, F-SEARCH-03). The map
+toggle in search used to be a schematic gradient-and-grid placeholder with hand-picked 0..1
+coordinates — no network dependency, no API key, no real geography. It's now a real Google Map on
+every platform, which turned out to need two files, not one: there is no single library today that
+renders Google Maps on web *and* iOS *and* Android from one component in a Metro-bundled Expo app.
+Web uses `@vis.gl/react-google-maps` (Google's own actively-maintained wrapper around the Maps
+JavaScript API); native uses `react-native-maps` with `provider="google"` set explicitly — without
+it, iOS quietly falls back to Apple Maps, which is not what "Google Maps everywhere" means. Both
+files export the identical `{ venues, onSearchArea }` shape the old single component did, so
+nothing calling `MiniMap` had to change; Metro's own filename-suffix resolution (`.web.tsx` /
+`.native.tsx`) picks the right one per platform, the same mechanism `app/(tabs)/index.tsx` and
+every other screen already rely on implicitly. `tsconfig.json` gained a `moduleSuffixes` entry so
+`tsc` can follow that same resolution — worth knowing if a future platform-split file's import
+mysteriously "can't be found" by the type checker despite building fine.
+
+Real venue coordinates didn't exist before this either: `venues.lat`/`lng` were columns in the
+schema (added for a haversine distance calculation in `withDistances()`) but had never actually
+been populated, so that function's real-math branch was always silently skipped in favor of the
+seed's hand-set `distanceMi`. Backfilling real Houston coordinates for all 19 seed venues fixes
+that as a side effect, not just feeds the map. The old normalized `map_x`/`map_y` columns had no
+remaining reader once the schematic map was deleted and were dropped rather than left as dead
+schema — see `20260828160000_add_real_coordinates.sql`.
+
+**Setup this repository cannot do on its own**, the same shape as the Google Sign-In section
+above: three separate Google Maps Platform API keys from a Google Cloud project with billing
+enabled (a monthly credit covers ordinary development use, but it is not free-forever the way the
+Supabase publishable key is) — one for "Maps JavaScript API" (web, HTTP-referrer restricted), one
+for "Maps SDK for iOS" (bundle-id restricted), one for "Maps SDK for Android" (package + SHA-1
+restricted). Exact instructions and env var names are in `.env.example`. The web key is
+`EXPO_PUBLIC_*` on purpose (a JS API key is designed to ship in a page; the referrer restriction is
+what protects it); the two native keys are read only by `app.config.ts` at `expo prebuild` time and
+never enter the JS bundle. Without the web key, `MiniMap.web.tsx` shows an honest "Map unavailable"
+message rather than a blank screen or a fetch loop against an undefined key. `mapId="DEMO_MAP_ID"`
+on the web map is Google's own published sandbox id for `AdvancedMarker` — it needs no Cloud
+Console styling setup, but Google's docs are explicit that it should not ship to production; a real
+Map ID takes five minutes to create once this has a production Cloud project. Native maps also
+need a development build, not Expo Go, once a real key is configured — standard for any Expo
+project using `react-native-maps`, not specific to this one.
+
+**What's out of scope**: the "Directions" action on a venue profile still deep-links out to
+`maps.google.com` with the address (`Linking.openURL`, no API key needed for that) rather than
+rendering turn-by-turn directions in-app — the Directions API and route rendering are a
+meaningfully different feature from "show pins on a map," and nothing asked for in-app navigation.
+Marker clustering at low zoom, satellite/traffic layer toggles, and a single-venue mini-map on the
+profile screen itself are all real Google Maps features this build doesn't turn on — the ask was
+parity with the schematic map's own feature set (pins, pan/zoom, bounded re-search), now on real
+tiles, not a superset of it.
+
 **Bar/Lounge tiebreak** (PRD Open Question 8). Dual-assigned venues filter on their primary
 category, and in Tonight they surface as a Bar before 11 PM and as a Lounge after, since dwell
 rises later. The rule is stated in the UI rather than left implicit.
@@ -586,11 +634,6 @@ Postgres happened to return, not a real sort.
   queue and reviewers to act on it, and F-TRUST/F-ADMIN are out of scope for the same reason F-BIZ
   is — there is no internal tooling in this client. What's real instead: the removal-*request*
   flow itself, and a database-enforced daily upload cap.
-- **Map tiles.** `MiniMap` is a schematic map with normalized coordinates, because the demo has no
-  network dependency or API key. It implements the requirement that matters — pin interaction and
-  map-bounded re-search. Swapping in `react-native-maps` later replaces that one component; the
-  bounds contract is unchanged.
-
 ## Backend
 
 Supabase. The schema, row-level security, and seed live in `supabase/`; the client and data

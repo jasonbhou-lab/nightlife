@@ -82,7 +82,10 @@ function mapVenue(row: VenueRow, tiers: TableTierRow[]): Venue {
     // Distance is a function of the user's position, not a stored column.
     // Computed below once we know where they are.
     distanceMi: 0,
-    map: { x: row.map_x ?? 0.5, y: row.map_y ?? 0.5 },
+    // Falls back to downtown Houston's own coordinates rather than 0,0 (off
+    // the coast of Africa) on the off chance a venue is ever missing them.
+    lat: row.lat ?? 29.7604,
+    lng: row.lng ?? -95.3698,
     phone: row.phone ?? '',
     website: row.website ?? undefined,
     rating: Number(row.rating),

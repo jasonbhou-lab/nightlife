@@ -58,8 +58,6 @@ export type VenueRow = {
   address: string;
   lat: number | null;
   lng: number | null;
-  map_x: number | null;
-  map_y: number | null;
   phone: string | null;
   website: string | null;
   rating: number;

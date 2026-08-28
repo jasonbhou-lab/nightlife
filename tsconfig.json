@@ -5,7 +5,20 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    // Lets tsc resolve MiniMap.web.tsx / MiniMap.native.tsx from a plain
+    // `@/components/MiniMap` import the same way Metro's bundler-time
+    // platform resolution already does -- tsc has no platform of its own,
+    // so this just needs some suffix to match. The bare suffix ("") is
+    // listed first deliberately: several vendor packages (expo-image-
+    // manipulator among them) ship a slimmer *.web.d.ts sibling next to
+    // their real .d.ts, and checking ".web" before "" made tsc pick that
+    // slimmer file for everything, everywhere, not just this app's own
+    // platform-split files -- surfacing phantom errors project-wide. Bare
+    // first means every other import keeps resolving exactly as before;
+    // suffix resolution only ever kicks in for files, like MiniMap, that
+    // have no bare .tsx of their own.
+    "moduleSuffixes": ["", ".native", ".web", ".ios", ".android"]
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
   "exclude": ["node_modules", "scripts", "dist"]
