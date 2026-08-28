@@ -287,7 +287,9 @@ export default function ProfileScreen() {
                 <Text style={[font.meta, { color: theme.textDim, marginTop: 2 }]}>
                   {b.kind === 'waitlist'
                     ? `Waitlist, position ${b.waitlistPosition}, about ${b.waitMinutes} min`
-                    : `${b.date} at ${formatTime(b.time)} · ${b.partySize} guests${b.tier ? ` · table ${b.tier}` : ''}`}
+                    : b.kind === 'guest_list'
+                      ? `Guest list, ${b.status === 'requested' ? 'pending approval' : "you're on the list"} · ${b.partySize} guests`
+                      : `${b.date} at ${formatTime(b.time)} · ${b.partySize} guests${b.tier ? ` · table ${b.tier}` : ''}`}
                 </Text>
                 {b.deposit ? (
                   <Text style={[font.small, { color: theme.warn, marginTop: 4 }]}>

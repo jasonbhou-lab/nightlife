@@ -34,7 +34,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Reviews | F-REVIEW-01 through 13 (client surface) |
 | Media | F-MEDIA-01, 04, 05, 06 |
 | Social | F-SOCIAL-01 through 07 |
-| Booking | F-BOOK-01 through 04, 06, 09, 09a, 10, 11 |
+| Booking | F-BOOK-01 through 04, 06, 07, 09, 09a, 10, 11 |
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 02 (scoped), 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
@@ -468,14 +468,31 @@ the only content type with a real report entry point in this client). Every mode
 resolves a specific report on file — there is no "just remove this" door for a moderator
 patrolling without one.
 
+**Guest list** (`app/book/[id].tsx`'s `GuestListForm`, F-BOOK-07). Previously a stub: tapping
+"Guest list" on a nightclub profile silently routed into the generic walk-in-bar waitlist form —
+same host-stand position/wait-time simulation a dive bar gets, header mislabeled "Waitlist," no
+cutoff, no capacity, no promoter distinction, even though `guestListCutoff` and
+`promoterAffiliated` attributes already existed on the venue (the former read in exactly one
+place, a headline sentence; the latter read nowhere at all). `guest_list` is now its own
+`BookingMode`, and cutoff and capacity are real, enforced twice: once client-side for a fast
+message, and again by a trigger on `bookings` for the actual decision — the same "the database is
+what actually decides" discipline the review character floor already uses. The venue's remaining
+capacity for tonight is shown before submitting, read through a `SECURITY DEFINER` function
+(`guest_list_count`) rather than a relaxed read policy on `bookings`, so a guest learns how many
+spots are taken without ever seeing who holds them. `promoterAffiliated` finally does something:
+true routes the request to `status: 'requested'` for approval, false auto-confirms it exactly like
+a reservation does. Approval needed no new console — F-BIZ-11's existing Confirm/Cancel actions
+already work off `status`, not `kind`, so a pending guest-list request surfaces there for free.
+
 **Reservation and waitlist console** (`app/venue/bookings.tsx`, F-BIZ-11, scoped). Real visibility
 into bookings and waitlist entries at a venue a business account manages — confirm a requested
-table, cancel a no-show, seat or remove someone waitlisted — matching the "manage reservations and
-waitlist" cell the permission matrix (Section 2.4) already claimed for R7/R8/R9. No floor map, no
-real-time table-tier status, no staff assignment: those need an interactive room-map UI built
-against `table_tiers`, a genuinely different feature from giving a business a list it can act on.
-`guestName` comes from a device-side join against `profiles`, and is absent (falls back to
-"Guest") rather than invented when the guest's own profile isn't public.
+table, cancel a no-show, seat or remove someone waitlisted, approve or decline a guest-list request
+(F-BOOK-07) — matching the "manage reservations and waitlist" cell the permission matrix
+(Section 2.4) already claimed for R7/R8/R9. No floor map, no real-time table-tier status, no staff
+assignment: those need an interactive room-map UI built against `table_tiers`, a genuinely
+different feature from giving a business a list it can act on. `guestName` comes from a
+device-side join against `profiles`, and is absent (falls back to "Guest") rather than invented
+when the guest's own profile isn't public.
 
 Building this surfaced the largest gap found this session: `saveBooking` had existed in the
 repository layer since early in the build, fully wired to real RLS, and **nothing had ever called

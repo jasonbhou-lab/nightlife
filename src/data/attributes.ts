@@ -391,8 +391,16 @@ export const attributeDefs: AttributeDef[] = [
   }),
 
   /* -------------------------------------------------------- nightclub */
+  /**
+   * F-BOOK-07: this is the search-filterable "does this venue run a guest
+   * list at all" declaration. The profile's "Guest list" action button is
+   * gated separately, on `bookingModes.includes('guest_list')`, so it can
+   * never point a tap at this attribute being true while the real booking
+   * flow isn't actually wired up for the venue.
+   */
   def('guestList', 'Guest list', B, 'entry', ['nightclub'], { filterable: true, ttlDays: 14 }),
   def('guestListCutoff', 'Guest list cutoff', T, 'entry', ['nightclub'], { ttlDays: 14 }),
+  def('guestListCapacity', 'Guest list capacity', I, 'entry', ['nightclub'], { unit: 'names/night' }),
   def('promoterAffiliated', 'Promoter-driven guest list', B, 'entry', ['nightclub']),
   def('bottleMenuPublished', 'Bottle menu published', B, 'money', ['nightclub', 'lounge']),
   def('capacity', 'Capacity', I, 'crowd', ['nightclub'], { filterAsMinimum: true }),

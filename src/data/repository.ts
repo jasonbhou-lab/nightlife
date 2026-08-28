@@ -599,6 +599,20 @@ export async function cancelBookingRemote(bookingId: string): Promise<{ ok: true
   return { ok: true };
 }
 
+/**
+ * F-BOOK-07: how many names are already on a venue's guest list for one
+ * night, so the composer can show remaining capacity before submitting.
+ * Calls a security-definer function rather than reading `bookings` directly
+ * — a guest can learn how many spots are taken, never who holds them. With
+ * no backend, there is nothing to count; 0 (not a guess) is honest here.
+ */
+export async function getGuestListCount(venueId: string, date: string): Promise<number> {
+  if (!hasBackend || !supabase) return 0;
+  const { data, error } = await supabase.rpc('guest_list_count', { p_venue_id: venueId, p_date: date });
+  if (error || data == null) return 0;
+  return data;
+}
+
 /** Mirror a locally-saved review draft to the account so it follows devices. */
 export async function syncDraft(input: {
   venueId: string;

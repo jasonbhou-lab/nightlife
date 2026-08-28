@@ -139,6 +139,7 @@ export function actionsFor(venue: Venue): Action[] {
   const canHold = modes.includes('bar_hold');
   const canWaitlist = modes.includes('waitlist');
   const canInquire = modes.includes('inquiry');
+  const canGuestList = modes.includes('guest_list');
 
   if (v === 'dining') {
     if (canReserve) acts.push({ key: 'reserve', label: 'Reserve', icon: 'calendar', primary: true });
@@ -167,7 +168,7 @@ export function actionsFor(venue: Venue): Action[] {
     acts.push({ key: 'call', label: 'Call', icon: 'call' });
   } else {
     if (canTable) acts.push({ key: 'table', label: 'Book a table', icon: 'wine', primary: true });
-    if (venue.attributes.guestList) acts.push({ key: 'guestlist', label: 'Guest list', icon: 'people' });
+    if (canGuestList) acts.push({ key: 'guestlist', label: 'Guest list', icon: 'people' });
     acts.push({ key: 'tickets', label: 'Tickets', icon: 'ticket' });
     acts.push({ key: 'directions', label: 'Directions', icon: 'navigate' });
   }
@@ -179,6 +180,7 @@ export const bookingModeLabel: Record<BookingMode, string> = {
   reservation: 'Reservation',
   table_service: 'Table service',
   waitlist: 'Waitlist',
+  guest_list: 'Guest List',
   bar_hold: 'Table hold',
   inquiry: 'Inquiry',
   walk_in: 'Walk-in only',

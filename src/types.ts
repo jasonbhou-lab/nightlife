@@ -304,6 +304,8 @@ export type BookingMode =
   | 'table_service'
   /** Remote waitlist only. */
   | 'waitlist'
+  /** Nightclub guest list: venue-defined cutoff, capacity, approval or auto-approval (F-BOOK-07). */
+  | 'guest_list'
   /** Bar primitives: large party, game-day table, tour slot (F-BOOK-09a). */
   | 'bar_hold'
   /** Membership / locker inquiry (F-BOOK-09). */

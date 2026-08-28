@@ -24,7 +24,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type VerticalEnum = 'dining' | 'bar' | 'lounge' | 'cigar' | 'nightclub';
 export type ProvenanceEnum = 'owner' | 'community' | 'provider' | 'operator_verified';
 export type BookingModeEnum =
-  | 'reservation' | 'table_service' | 'waitlist' | 'bar_hold' | 'inquiry' | 'walk_in';
+  | 'reservation' | 'table_service' | 'waitlist' | 'guest_list' | 'bar_hold' | 'inquiry' | 'walk_in';
 export type BookingStatusEnum = 'confirmed' | 'requested' | 'waitlisted' | 'cancelled';
 export type ClosureStateEnum = 'temporary' | 'permanent' | 'moved' | 'seasonal';
 export type MessageThreadKindEnum = 'general' | 'quote_request';
@@ -525,7 +525,12 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      guest_list_count: {
+        Args: { p_venue_id: string; p_date: string };
+        Returns: number;
+      };
+    };
     Enums: {
       vertical: VerticalEnum;
       provenance: ProvenanceEnum;

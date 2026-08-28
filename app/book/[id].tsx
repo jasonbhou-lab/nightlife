@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 
 import { TableMap } from '@/components/TableMap';
@@ -9,9 +9,9 @@ import {
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
-import { saveBooking } from '@/data/repository';
+import { getGuestListCount, saveBooking } from '@/data/repository';
 import { bookingModeLabel, money } from '@/lib/format';
-import { formatTime, isOpenAt, venueState } from '@/lib/hours';
+import { formatTime, isOpenAt, toMinutes, venueState } from '@/lib/hours';
 import { hasBackend } from '@/lib/supabase';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -42,7 +42,7 @@ export default function BookScreen() {
       hold: 'bar_hold',
       waitlist: 'waitlist',
       membership: 'inquiry',
-      guestlist: 'waitlist',
+      guestlist: 'guest_list',
     };
     const wanted = intent ? map[intent] : undefined;
     const usable: BookingMode[] = venue.bookingModes.filter((m) => m !== 'walk_in');
@@ -110,6 +110,7 @@ export default function BookScreen() {
       {mode === 'reservation' ? <ReservationForm venue={venue} /> : null}
       {mode === 'table_service' ? <TableServiceForm venue={venue} /> : null}
       {mode === 'waitlist' ? <WaitlistForm venue={venue} /> : null}
+      {mode === 'guest_list' ? <GuestListForm venue={venue} /> : null}
       {mode === 'bar_hold' ? <BarHoldForm venue={venue} /> : null}
       {mode === 'inquiry' ? <InquiryForm venue={venue} /> : null}
     </Screen>
@@ -258,13 +259,17 @@ function Confirmed({ booking, venue }: { booking: Booking; venue: Venue }) {
               ? 'You are on the list'
               : booking.status === 'requested'
                 ? 'Request sent'
-                : 'Confirmed'}
+                : booking.kind === 'guest_list'
+                  ? "You're on tonight's list"
+                  : 'Confirmed'}
           </Text>
           <Body dim style={{ textAlign: 'center' }}>
             {booking.status === 'waitlisted'
               ? `Position ${booking.waitlistPosition}, roughly ${booking.waitMinutes} minutes. We will notify you when your table is ready.`
               : booking.status === 'requested'
-                ? 'The venue will reply here and by email. Nothing has been charged.'
+                ? booking.kind === 'guest_list'
+                  ? 'The promoter reviews requests before confirming. Nothing has been charged.'
+                  : 'The venue will reply here and by email. Nothing has been charged.'
                 : 'Confirmation sent by push and email. It stays readable on this device without signal.'}
           </Body>
         </View>
@@ -273,7 +278,7 @@ function Confirmed({ booking, venue }: { booking: Booking; venue: Venue }) {
 
         <Row label="Venue" value={venue.name} />
         <Row label="Type" value={bookingModeLabel[booking.kind]} />
-        {booking.kind !== 'waitlist' && booking.kind !== 'inquiry' ? (
+        {booking.kind !== 'waitlist' && booking.kind !== 'guest_list' && booking.kind !== 'inquiry' ? (
           <>
             <Row label="Date" value={booking.date} />
             <Row label="Time" value={formatTime(booking.time)} />
@@ -802,6 +807,154 @@ function WaitlistForm({ venue }: { venue: Venue }) {
             status: 'waitlisted',
             waitlistPosition: position,
             waitMinutes: wait,
+            createdAt: now.toISOString(),
+          };
+          addBooking(b);
+          setBooking(b);
+        }}
+      />
+    </View>
+  );
+}
+
+/* -------------------------------------------------------- guest list form */
+
+/**
+ * F-BOOK-07. Distinct from `WaitlistForm` on purpose: a guest list request
+ * is for tonight specifically (not "whenever a table opens"), closes at a
+ * venue-declared cutoff, is capped at a venue-declared capacity, and either
+ * auto-confirms or waits on the promoter's approval — none of which the
+ * generic walk-in-bar waitlist this used to route into has any concept of.
+ * Cutoff and capacity are enforced again server-side (see the migration
+ * header on 20260828150100_add_guest_list_rules.sql); this is the fast,
+ * friendly version of that same check, not the real gate.
+ */
+function GuestListForm({ venue }: { venue: Venue }) {
+  const theme = useTheme();
+  const { addBooking, now } = useApp();
+  const [party, setParty] = useState(2);
+  const [notes, setNotes] = useState('');
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [taken, setTaken] = useState<number | null>(null);
+
+  const today = now.toISOString().slice(0, 10);
+  const cutoff = typeof venue.attributes.guestListCutoff === 'string' ? venue.attributes.guestListCutoff : undefined;
+  const capacity = typeof venue.attributes.guestListCapacity === 'number' ? venue.attributes.guestListCapacity : undefined;
+  const promoterAffiliated = venue.attributes.promoterAffiliated === true;
+
+  useEffect(() => {
+    let cancelled = false;
+    getGuestListCount(venue.id, today).then((n) => {
+      if (!cancelled) setTaken(n);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [venue.id, today]);
+
+  const cutoffPassed = cutoff != null && now.getHours() * 60 + now.getMinutes() > toMinutes(cutoff);
+  const remaining = capacity != null && taken != null ? capacity - taken : null;
+  const full = remaining != null && remaining <= 0;
+  const closed = cutoffPassed || full;
+
+  if (booking) return <Confirmed booking={booking} venue={venue} />;
+
+  return (
+    <View style={[gutter(), { gap: space.lg }]}>
+      {closed ? (
+        <Callout tone="warn" icon="time" title={cutoffPassed ? 'Guest list closed for tonight' : 'Guest list full for tonight'}>
+          <Body dim>
+            {cutoffPassed
+              ? `Requests closed at ${formatTime(cutoff!)}. Check back tomorrow, or ask about a table instead.`
+              : 'Every spot for tonight is taken. Check back tomorrow, or ask about a table instead.'}
+          </Body>
+        </Callout>
+      ) : null}
+
+      <Card>
+        <View style={[ui.row, { gap: space.md, marginBottom: space.lg }]}>
+          <IconBadge icon="people" size={44} />
+          <View style={{ flex: 1 }}>
+            <Text style={[font.cardTitle, { color: theme.text }]}>Tonight's guest list</Text>
+            <Body dim style={{ marginTop: 2 }}>
+              {cutoff ? `Requests close at ${formatTime(cutoff)}.` : 'No published cutoff.'}{' '}
+              {promoterAffiliated
+                ? 'This list is promoter-managed, so requests are reviewed, not automatic.'
+                : "You'll be added the moment you submit."}
+            </Body>
+          </View>
+        </View>
+        <PartySize value={party} onChange={setParty} max={10} />
+      </Card>
+
+      {capacity != null ? (
+        <Card>
+          <Label>Spots left tonight</Label>
+          <View style={{ marginTop: space.md, backgroundColor: theme.inset, borderRadius: radius.md, padding: space.md }}>
+            <Text style={[font.title, { color: theme.insetText }]}>
+              {taken == null ? '—' : Math.max(0, remaining ?? 0)}
+            </Text>
+            <Text style={[font.small, { color: theme.insetDim, marginTop: 2 }]}>
+              of {capacity} names for tonight
+            </Text>
+          </View>
+        </Card>
+      ) : null}
+
+      <Card>
+        <Label>Anything the door should know (optional)</Label>
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          placeholder="Arriving with, expected time, anything else"
+          placeholderTextColor={theme.textFaint}
+          accessibilityLabel="Notes for the door"
+          style={[
+            font.body,
+            {
+              color: theme.text,
+              backgroundColor: theme.cardMuted,
+              borderRadius: radius.md,
+              padding: space.md,
+              minHeight: 80,
+              marginTop: space.sm,
+              textAlignVertical: 'top',
+            },
+          ]}
+        />
+      </Card>
+
+      <Button
+        label={promoterAffiliated ? `Send request for ${party}` : `Join tonight's list for ${party}`}
+        full
+        loading={submitting}
+        disabled={closed}
+        onPress={async () => {
+          const status = promoterAffiliated ? 'requested' : 'confirmed';
+          const time = `${String(now.getHours()).padStart(2, '0')}:00`;
+          setSubmitting(true);
+          const id = await persistBooking({
+            venueId: venue.id,
+            kind: 'guest_list',
+            date: today,
+            time,
+            partySize: party,
+            status,
+            notes: notes.trim() || undefined,
+          });
+          setSubmitting(false);
+          if (!id) return;
+          const b: Booking = {
+            id,
+            venueId: venue.id,
+            kind: 'guest_list',
+            date: today,
+            time,
+            partySize: party,
+            status,
+            notes: notes.trim() || undefined,
             createdAt: now.toISOString(),
           };
           addBooking(b);

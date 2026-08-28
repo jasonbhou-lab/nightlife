@@ -1243,7 +1243,7 @@ export const venues: Venue[] = [
     attributes: {
       coverCharge: 30, coverNights: ['thu', 'fri', 'sat', 'events'],
       coverWaived: 'Guest list before 11 PM, or with a table',
-      guestList: true, guestListCutoff: '23:00', promoterAffiliated: true,
+      guestList: true, guestListCutoff: '23:00', guestListCapacity: 150, promoterAffiliated: true,
       bottleService: true, bottleMinimum: 800, bottleMenuPublished: true, minimumSpend: 800,
       vipArea: true, vipEntrance: true, capacity: 900, peakHour: '00:30',
       typicalWaitAtPeak: 40, genres: ['house', 'edm', 'top_40'],
@@ -1294,7 +1294,7 @@ export const venues: Venue[] = [
       { id: 'k-f2', name: 'F2', section: 'Floor', minimumSpend: 800, seats: 6, x: 0.52, y: 0.78, available: true },
       { id: 'k-f3', name: 'F3', section: 'Floor', minimumSpend: 800, seats: 6, x: 0.8, y: 0.76, available: true },
     ],
-    bookingModes: ['table_service', 'waitlist'],
+    bookingModes: ['table_service', 'guest_list'],
     bookingTerms:
       'A 30% deposit of the table minimum is charged at booking and applied to your minimum. ' +
       'Cancellations more than 72 hours out are refunded in full; inside 72 hours the deposit is ' +
@@ -1333,7 +1333,7 @@ export const venues: Venue[] = [
     ],
     attributes: {
       coverCharge: 15, coverNights: ['thu', 'fri', 'sat'], coverWaived: 'Free before 10 PM Thursday',
-      guestList: true, guestListCutoff: '22:30', promoterAffiliated: false,
+      guestList: true, guestListCutoff: '22:30', guestListCapacity: 80, promoterAffiliated: false,
       bottleService: true, bottleMinimum: 350, bottleMenuPublished: true, minimumSpend: 350,
       vipArea: true, vipEntrance: false, capacity: 520, peakHour: '00:00',
       typicalWaitAtPeak: 20, genres: ['latin', 'reggaeton', 'throwback'],
@@ -1367,7 +1367,7 @@ export const venues: Venue[] = [
       { id: 's-f1', name: 'F1', section: 'Floor', minimumSpend: 350, seats: 4, x: 0.35, y: 0.85, available: true },
       { id: 's-f2', name: 'F2', section: 'Floor', minimumSpend: 350, seats: 4, x: 0.62, y: 0.85, available: true },
     ],
-    bookingModes: ['table_service', 'waitlist'],
+    bookingModes: ['table_service', 'guest_list'],
     bookingTerms:
       'A $100 deposit holds the table and applies to the minimum. Refundable up to 24 hours before. ' +
       'A 20% service charge applies to the minimum.',
