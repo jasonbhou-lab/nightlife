@@ -80,6 +80,11 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
   experiments: {
     typedRoutes: false,
   },
+  extra: {
+    eas: {
+      projectId: 'b2d39e4b-f8c0-419f-be3a-765f9d12ca60',
+    },
+  },
 };
 
 export default config;
