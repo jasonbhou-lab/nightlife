@@ -62,6 +62,20 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
         androidGoogleMapsApiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY,
       },
     ],
+    [
+      'expo-image-picker',
+      {
+        // src/lib/media.ts calls both launchCameraAsync and
+        // launchImageLibraryAsync, restricted to mediaTypes: ['images'] --
+        // never video -- so microphonePermission is set false rather than
+        // left to the plugin's default, which would otherwise request
+        // RECORD_AUDIO on Android and an NSMicrophoneUsageDescription on iOS
+        // for a capability (video/audio capture) this app never uses.
+        photosPermission: 'NightOut uses your photo library so you can add photos to a venue review.',
+        cameraPermission: 'NightOut uses your camera so you can take a photo to add to a venue review.',
+        microphonePermission: false,
+      },
+    ],
   ],
   experiments: {
     typedRoutes: false,

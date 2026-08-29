@@ -219,10 +219,10 @@ function TermsBlock({
             backgroundColor: theme.inset,
           }}
         >
-          <Text style={[font.small, { color: theme.insetDim }]}>Charged now</Text>
+          <Text style={[font.small, { color: theme.insetDim }]}>Deposit due at the venue</Text>
           <Text style={[font.title, { color: theme.insetText }]}>{money(deposit)}</Text>
           <Text style={[font.small, { color: theme.insetDim, marginTop: 2 }]}>
-            Applied to your minimum, not additional to it
+            Applied to your minimum, not additional to it. Not collected in the app.
           </Text>
         </View>
       ) : null}
@@ -286,14 +286,16 @@ function Confirmed({ booking, venue }: { booking: Booking; venue: Venue }) {
         ) : null}
         <Row label="Party" value={`${booking.partySize} guests`} />
         {booking.tier ? <Row label="Table" value={booking.tier} /> : null}
-        {booking.deposit ? <Row label="Deposit charged" value={money(booking.deposit)} /> : null}
+        {booking.deposit ? <Row label="Deposit due at venue" value={money(booking.deposit)} /> : null}
         {booking.notes ? <Row label="Notes" value={booking.notes} /> : null}
       </Card>
 
       <Button label="Done" full onPress={() => router.replace(`/venue/${venue.id}`)} />
-      <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center' }]}>
-        Prototype: nothing was actually reserved and no payment was taken.
-      </Text>
+      {!hasBackend ? (
+        <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center' }]}>
+          No backend is configured, so this booking exists only on this device.
+        </Text>
+      ) : null}
     </View>
   );
 }

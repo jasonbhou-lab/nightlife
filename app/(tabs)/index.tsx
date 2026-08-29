@@ -342,22 +342,6 @@ export default function HomeScreen() {
           </Card>
         </View>
       ) : null}
-
-      {/* A short honest note about what this build is. */}
-      <View style={gutter()}>
-        <Card>
-          <View style={[ui.row, { gap: space.sm, marginBottom: space.sm }]}>
-            <Ionicons name="information-circle" size={16} color={theme.textDim} />
-            <Text style={[font.small, { color: theme.textDim }]}>Prototype build</Text>
-          </View>
-          <Body dim>
-            Phase 1 and 2 consumer scope from the PRD, running against a seeded Houston database of{' '}
-            {venues.length} venues. No backend, no payments, no real reservation inventory. The
-            business portal, moderation console, and internal tooling are out of scope for this
-            client.
-          </Body>
-        </Card>
-      </View>
     </Screen>
   );
 }

@@ -194,7 +194,7 @@ export default function MenuScreen() {
                 Alcohol is excluded from delivery unless both the venue and the jurisdiction permit
                 it and age is verified at handoff. Where delivery is offered, every fee, service
                 charge, and markup is itemized at checkout rather than rolled into one line. Checkout
-                itself is not implemented in this prototype.
+                itself is not available yet.
               </Text>
             </View>
           </Card>

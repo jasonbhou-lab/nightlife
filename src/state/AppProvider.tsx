@@ -6,8 +6,8 @@ import React, {
 import { useColorScheme } from 'react-native';
 
 import {
-  cancelBookingRemote, completeAuthFromUrl, createMessageThread, getAuthSnapshot, getManagedVenueIds,
-  getPlatformRoles, getThreadMessages, onAuthSignedOut, sendMessage as sendMessageRemote,
+  cancelBookingRemote, completeAuthFromUrl, createMessageThread, deleteOwnAccount, getAuthSnapshot,
+  getManagedVenueIds, getPlatformRoles, getThreadMessages, onAuthSignedOut, sendMessage as sendMessageRemote,
   sendSignInCode as sendSignInCodeRemote, signInWithGoogle as signInWithGoogleRemote,
   signOutRemote, verifySignInCode as verifySignInCodeRemote, type AuthProfile,
 } from '@/data/repository';
@@ -90,6 +90,8 @@ type Ctx = {
   /** No-backend fallback only: a local, unpersisted-past-this-device identity. */
   signIn: (name: string) => void;
   signOut: () => void;
+  /** Permanently deletes the account and everything in it. See repository.deleteOwnAccount. */
+  deleteAccount: () => Promise<{ ok: true } | { ok: false; error: string }>;
   /**
    * Real Supabase Auth (email one-time code), when a backend is configured.
    * `sendSignInCode` emails the code; `verifySignInCode` confirms it and,
@@ -475,6 +477,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (hasBackend) signOutRemote().catch(() => {});
   }, [persist]);
 
+  /**
+   * Without a backend there is no real account to delete — only the same
+   * local, unpersisted-past-this-device identity `signIn` creates — so this
+   * just signs out, honestly matching what the no-backend mock ever was.
+   */
+  const deleteAccount = useCallback(async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (!hasBackend) {
+      signOut();
+      return { ok: true };
+    }
+    const result = await deleteOwnAccount();
+    if (!result.ok) return result;
+    setSession(defaultSession);
+    persist(KEYS.session, defaultSession);
+    setManagedVenueIds([]);
+    setPlatformRoles([]);
+    return { ok: true };
+  }, [persist, signOut]);
+
   const isManagingVenue = useCallback(
     (venueId: string) => managedVenueIds.includes(venueId),
     [managedVenueIds],
@@ -850,6 +871,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       session,
       signIn,
       signOut,
+      deleteAccount,
       sendSignInCode,
       verifySignInCode,
       signInWithGoogle,
@@ -903,7 +925,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setClockOverride: setClockOverrideState,
     }),
     [
-      ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, sendSignInCode,
+      ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, deleteAccount, sendSignInCode,
       verifySignInCode, signInWithGoogle, authCallbackError, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
       addManagedVenue, platformRoles, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,

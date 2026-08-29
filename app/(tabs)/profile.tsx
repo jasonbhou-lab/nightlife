@@ -25,7 +25,7 @@ export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
   const {
-    session, signOut, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
+    session, signOut, deleteAccount, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
     followedMemberIds, followedVenueIds, checkIns, addManagedVenue, isModerator, isTrustSafety,
     isAdmin,
@@ -34,6 +34,16 @@ export default function ProfileScreen() {
 
   const [invites, setInvites] = useState<BusinessInvite[]>([]);
   const [invitesBusy, setInvitesBusy] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const confirmDeleteAccount = async () => {
+    setDeletingAccount(true);
+    const result = await deleteAccount();
+    setDeletingAccount(false);
+    if (!result.ok) {
+      Alert.alert('Could not delete your account', result.error);
+    }
+  };
 
   useEffect(() => {
     if (session.role === 'guest') return;
@@ -455,29 +465,34 @@ export default function ProfileScreen() {
         </Card>
       </View>
 
-      {/* Demo clock. */}
-      <View style={gutter()}>
-        <SectionHeader title="Demo clock" subtitle="Everything time-aware follows this" />
-        <Card>
-          <Text style={[font.meta, { color: theme.textDim }]}>
-            Currently {clockOverride == null ? 'using the real device time' : 'overridden'}:{' '}
-            {formatTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md }}>
-            {[12, 17, 19, 21, 23, 1, 3].map((h) => (
-              <Chip
-                key={h}
-                label={formatTime(`${String(h).padStart(2, '0')}:00`)}
-                selected={clockOverride === h}
-                onPress={() => setClockOverride(clockOverride === h ? null : h)}
-              />
-            ))}
-            {clockOverride != null ? (
-              <Chip label="Real time" icon="refresh" onPress={() => setClockOverride(null)} />
-            ) : null}
-          </View>
-        </Card>
-      </View>
+      {/* Dev-only time override for exercising Tonight Mode and happy-hour
+          windows without waiting for the clock — never shown in a production
+          build, since letting a shipped app's users override "now" would
+          read as debug scaffolding left in in App Review. */}
+      {__DEV__ ? (
+        <View style={gutter()}>
+          <SectionHeader title="Dev clock override" subtitle="Everything time-aware follows this" />
+          <Card>
+            <Text style={[font.meta, { color: theme.textDim }]}>
+              Currently {clockOverride == null ? 'using the real device time' : 'overridden'}:{' '}
+              {formatTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md }}>
+              {[12, 17, 19, 21, 23, 1, 3].map((h) => (
+                <Chip
+                  key={h}
+                  label={formatTime(`${String(h).padStart(2, '0')}:00`)}
+                  selected={clockOverride === h}
+                  onPress={() => setClockOverride(clockOverride === h ? null : h)}
+                />
+              ))}
+              {clockOverride != null ? (
+                <Chip label="Real time" icon="refresh" onPress={() => setClockOverride(null)} />
+              ) : null}
+            </View>
+          </Card>
+        </View>
+      ) : null}
 
       {/* Where the data is coming from. */}
       <View style={gutter()}>
@@ -505,20 +520,20 @@ export default function ProfileScreen() {
       <View style={gutter()}>
         <SectionHeader title="Account and data" />
         <Card padded={false}>
-          <LinkRow icon="download-outline" label="Export my data" detail="Reviews, photos, bookings" onPress={() => Alert.alert('Not in this build', 'Data export is a server-side path and is not implemented in the prototype.')} />
-          <Divider />
           <LinkRow
             icon="trash-outline"
-            label="Delete my account"
-            detail="Propagates within 30 days"
+            label={deletingAccount ? 'Deleting…' : 'Delete my account'}
+            detail="Immediate, cannot be undone"
             danger
+            disabled={deletingAccount}
             onPress={() =>
               Alert.alert(
                 'Delete your account?',
-                'This removes your profile, reviews, photos, collections, and bookings. Deletion propagates across systems within 30 days and cannot be undone.',
+                'This permanently removes your profile, reviews, bookings, collections, and message ' +
+                  'threads, and signs you out everywhere. It cannot be undone.',
                 [
                   { text: 'Keep my account', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: signOut },
+                  { text: 'Delete', style: 'destructive', onPress: confirmDeleteAccount },
                 ],
               )
             }
@@ -534,8 +549,8 @@ export default function ProfileScreen() {
 
       <View style={gutter()}>
         <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', lineHeight: 17 }]}>
-          NightOut prototype · Houston launch metro{'\n'}
-          Consumer scope only. No payments, no real inventory, no account system.
+          NightOut · Houston launch metro{'\n'}
+          Consumer scope only. No in-app payments, no live reservation inventory sync with venues.
         </Text>
       </View>
     </Screen>
@@ -579,21 +594,26 @@ function LinkRow({
   detail,
   onPress,
   danger,
+  disabled,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   detail?: string;
   onPress: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   const theme = useTheme();
   const color = danger ? theme.closed : theme.text;
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={disabled ? { disabled: true } : undefined}
       style={{
+        opacity: disabled ? 0.5 : 1,
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.md,

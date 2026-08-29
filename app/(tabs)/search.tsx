@@ -225,7 +225,7 @@ export default function SearchScreen() {
             <Pressable
               onPress={() =>
                 Alert.alert(
-                  'Location is fixed for this prototype',
+                  'Location is fixed for now',
                   'There is no real device location or manual location search wired up — every distance and ' +
                     '"open now" result here is computed against Downtown Houston.',
                 )

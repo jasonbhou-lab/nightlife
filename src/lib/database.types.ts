@@ -528,6 +528,10 @@ export type Database = {
         Args: { p_venue_id: string; p_date: string };
         Returns: number;
       };
+      delete_own_account: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
     };
     Enums: {
       vertical: VerticalEnum;

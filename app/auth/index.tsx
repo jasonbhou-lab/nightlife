@@ -250,12 +250,12 @@ export default function AuthScreen() {
 
           <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', lineHeight: 17 }]}>
             {hasBackend
-              ? 'Prototype: a one-time emailed code is the entire account — no password is ever ' +
-                'collected. Phone and age verification below remain self-attested; there is no real ' +
-                'SMS provider wired up. Multi-factor authentication would be mandatory for business ' +
-                'and internal roles.'
-              : 'Prototype: no backend is configured, so this identity is local to this device only ' +
-                'and nothing is created anywhere else. Phone and age verification below remain ' +
+              ? 'A one-time emailed code is the entire account — no password is ever collected. ' +
+                'Phone and age verification below remain self-attested; there is no SMS provider ' +
+                'wired up yet. Multi-factor authentication would be mandatory for business and ' +
+                'internal roles.'
+              : 'No backend is configured, so this identity is local to this device only and ' +
+                'nothing is created anywhere else. Phone and age verification below remain ' +
                 'self-attested either way.'}
           </Text>
         </View>

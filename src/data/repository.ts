@@ -1864,6 +1864,23 @@ export async function signOutRemote(): Promise<void> {
 }
 
 /**
+ * Permanently deletes the signed-in account: the profile, and everything
+ * that cascades from it (bookings, collections, message threads, photos,
+ * review drafts, business and platform roles, this account's venue claims
+ * and offers), then the auth.users row itself — see
+ * `delete_own_account()` (20260829100000_add_delete_own_account.sql) for
+ * exactly what that does and does not touch. There is no client-side undo:
+ * the row is gone the moment this returns ok, not queued for later removal.
+ */
+export async function deleteOwnAccount(): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is no account to delete.' };
+  const { error } = await supabase.rpc('delete_own_account');
+  if (error) return { ok: false, error: error.message };
+  await supabase.auth.signOut();
+  return { ok: true };
+}
+
+/**
  * Fires on a real sign-out, including one this device did not initiate —
  * an expired or revoked refresh token — but not on routine token refresh,
  * which fires its own event this deliberately ignores.

@@ -316,6 +316,23 @@ and message threads stay exactly as blocked as before, since their RLS policies 
 `private.is_verified()` and nothing here can make that true. With no backend configured, sign-in
 falls back to the original local-only mock unchanged, so the app keeps working offline.
 
+**Real account deletion** (`delete_own_account()`,
+`20260829100000_add_delete_own_account.sql`). "Delete my account" on the profile screen used to
+show a confirmation dialog and then only sign the device out — the account and every row under it
+were still there on the next sign-in. `profiles.id` carries no formal foreign key to `auth.users`
+(checked directly against the schema before writing this), so the function deletes both explicitly,
+`profiles` first. Every table that references `profiles(id)` already does so `ON DELETE CASCADE` or
+`ON DELETE SET NULL` — verified against `pg_constraint`, then simulated with `BEGIN`/`ROLLBACK`
+against a real profile before this was ever applied for real — so deleting the profile alone already
+removes bookings, collections, message threads, photos, review drafts, and this account's business
+and platform roles, while reviews and moderation history keep existing rows with `author_id`/
+`actor_id` set to null rather than disappearing, the same pattern `content_reports` and
+`venue_claims` already use elsewhere in this schema. Out of scope, on purpose: this account's
+uploaded photos' `storage.objects` rows are not swept — this build has no established path for that
+at all yet, the same real gap `photo_removal_requests` already has (a request is filed, never
+auto-executed). With no backend configured, deletion falls back to the same local sign-out the
+no-backend mock always did, honestly matching what that identity ever was.
+
 **The emailed link, and why consuming one is gated twice** (`src/data/repository.ts`'s
 `completeAuthFromUrl`). Whether Supabase's email carries a 6-digit code or a tappable link is a
 dashboard template choice, so the app accepts both; the link arrives back as an OS deep link and is

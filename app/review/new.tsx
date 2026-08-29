@@ -479,7 +479,7 @@ export default function NewReviewScreen() {
         />
         <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', marginTop: space.sm }]}>
           Drafts are stored on this device and survive closing the app. Signed in on another device,
-          they would follow you. Nothing here is actually published in the prototype.
+          they would follow you. Nothing here is published until you submit the review.
         </Text>
       </View>
       <View style={{ height: space.xxxl }} />
