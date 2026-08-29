@@ -20,8 +20,8 @@ import type { ExpoConfig } from 'expo/config';
 // @expo/config-types version hasn't caught up to yet -- widening the type
 // here rather than dropping the field or suppressing the whole file.
 const config: ExpoConfig & { newArchEnabled?: boolean } = {
-  name: 'NightOut',
-  slug: 'nightout',
+  name: 'Nightlife',
+  slug: 'nightlife',
   scheme: 'nightout',
   version: '1.0.0',
   orientation: 'portrait',
@@ -71,8 +71,8 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
         // left to the plugin's default, which would otherwise request
         // RECORD_AUDIO on Android and an NSMicrophoneUsageDescription on iOS
         // for a capability (video/audio capture) this app never uses.
-        photosPermission: 'NightOut uses your photo library so you can add photos to a venue review.',
-        cameraPermission: 'NightOut uses your camera so you can take a photo to add to a venue review.',
+        photosPermission: 'Nightlife uses your photo library so you can add photos to a venue review.',
+        cameraPermission: 'Nightlife uses your camera so you can take a photo to add to a venue review.',
         microphonePermission: false,
       },
     ],

@@ -40,7 +40,7 @@ export const supabase: SupabaseClient<Database> | null = hasBackend
         detectSessionInUrl: false,
       },
       global: {
-        headers: { 'x-client-info': 'nightout-mobile' },
+        headers: { 'x-client-info': 'nightlife-mobile' },
       },
     })
   : null;

@@ -549,7 +549,7 @@ export default function ProfileScreen() {
 
       <View style={gutter()}>
         <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', lineHeight: 17 }]}>
-          NightOut · Houston launch metro{'\n'}
+          Nightlife · Houston launch metro{'\n'}
           Consumer scope only. No in-app payments, no live reservation inventory sync with venues.
         </Text>
       </View>

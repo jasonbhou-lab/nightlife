@@ -64,7 +64,7 @@ export function buildVenueExport(venue: Venue, reviews: Review[]) {
 export async function exportVenueData(venue: Venue, reviews: Review[]): Promise<void> {
   const payload = buildVenueExport(venue, reviews);
   const json = JSON.stringify(payload, null, 2);
-  const filename = `${venue.id}-nightout-export.json`;
+  const filename = `${venue.id}-nightlife-export.json`;
 
   if (Platform.OS === 'web') {
     // React Native's own ambient types (Blob, no `document` at all) shadow

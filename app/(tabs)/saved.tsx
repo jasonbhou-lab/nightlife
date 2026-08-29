@@ -170,7 +170,7 @@ export default function SavedScreen() {
                     label="Share"
                     onPress={() =>
                       Share.share({
-                        message: `${c.name} — ${list.map((v) => v.name).join(', ')} (NightOut)`,
+                        message: `${c.name} — ${list.map((v) => v.name).join(', ')} (Nightlife)`,
                       }).catch(() => undefined)
                     }
                   />

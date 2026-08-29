@@ -65,7 +65,7 @@ export default function CollectionScreen() {
           <Pressable
             onPress={() =>
               Share.share({
-                message: `${collection.name} — ${list.map((v) => v.name).join(', ')} (NightOut)`,
+                message: `${collection.name} — ${list.map((v) => v.name).join(', ')} (Nightlife)`,
               }).catch(() => undefined)
             }
             hitSlop={8}

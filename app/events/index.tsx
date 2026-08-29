@@ -264,7 +264,7 @@ export default function EventsScreen() {
                   <View style={[ui.row, { gap: 5, marginTop: space.sm }]}>
                     <Ionicons name="open-outline" size={12} color={theme.textFaint} />
                     <Text style={[font.small, { color: theme.textFaint }]}>
-                      Ticketing is handled by a partner, not by NightOut
+                      Ticketing is handled by a partner, not by Nightlife
                     </Text>
                   </View>
                 ) : null}

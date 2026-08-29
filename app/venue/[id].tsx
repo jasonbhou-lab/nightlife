@@ -323,7 +323,7 @@ export default function VenueProfile() {
             <Pressable
               onPress={() =>
                 Share.share({
-                  message: `${venue.name} — ${venue.tagline}. ${venue.address}. ${state.label}. (NightOut)`,
+                  message: `${venue.name} — ${venue.tagline}. ${venue.address}. ${state.label}. (Nightlife)`,
                 }).catch(() => undefined)
               }
               hitSlop={8}

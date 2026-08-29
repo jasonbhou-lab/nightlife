@@ -1,4 +1,4 @@
-# NightOut
+# Nightlife
 
 A React Native (Expo) app built from `PRD_Nightlife_Dining_Discovery_Platform.md` — venue
 discovery, review, and booking across the PRD's five verticals: restaurants, bars, lounges,
