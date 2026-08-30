@@ -832,9 +832,21 @@ side of each rather than guessing:
 - Paid placements are labeled at every breakpoint and excluded from the "similar venues" module.
 - Transactional notifications are structurally separate from marketing consent.
 - No face detection is performed.
+- `ios.infoPlist.ITSAppUsesNonExemptEncryption` is set to `false` in `app.config.ts` — the US
+  export-compliance declaration Apple otherwise stops every build to ask by hand. It asserts the app
+  uses no *non-exempt* encryption, which was checked rather than assumed: every network call is
+  HTTPS/TLS (Supabase, Google Maps, the OAuth browser hop) and Supabase's JWTs are used for
+  authentication, both OS-provided and both standard published algorithms. There is no crypto
+  library in the dependency tree, no call to any crypto API anywhere in `src/` or `app/`, and no
+  encryption at rest — auth tokens sit in plain AsyncStorage. Adding `expo-secure-store`, encrypting
+  anything locally, or shipping a proprietary algorithm can each change that answer, so this needs
+  re-checking whenever the crypto surface does.
 
 None of the above is legal advice, and the PRD's own instruction stands: qualified legal and
-compliance counsel should review each area before the corresponding functionality ships.
+compliance counsel should review each area before the corresponding functionality ships. The export
+declaration in particular is an attestation the publisher makes to Apple and, through them, under US
+export regulations — the bullet above records what the code does, which is the input to that
+decision, not the decision itself.
 
 ## Layout
 

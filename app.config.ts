@@ -37,6 +37,28 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'io.linqx.nightout',
+    infoPlist: {
+      // US export-compliance declaration. Without this key, App Store Connect
+      // stops every build and asks the question by hand before it can even go
+      // to TestFlight.
+      //
+      // `false` asserts this app uses no *non-exempt* encryption. What it
+      // actually uses, audited before setting this: HTTPS/TLS for every
+      // network call (Supabase, Google Maps, the OAuth browser hop) and
+      // Supabase's JWTs for authentication. Both are OS-provided and use
+      // standard published algorithms, which is the exemption. This app
+      // implements no cryptography of its own -- there is no crypto library in
+      // the dependency tree, no call to any crypto API in src/ or app/, and no
+      // encryption at rest (tokens sit in plain AsyncStorage, as the security
+      // audit noted).
+      //
+      // Revisit this if that ever stops being true: adding expo-secure-store,
+      // encrypting anything locally, or shipping a proprietary algorithm can
+      // all change the answer. The declaration is a legal attestation by the
+      // publisher, not really a build setting -- see the README's "Compliance
+      // posture" section.
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     package: 'io.linqx.nightout',
