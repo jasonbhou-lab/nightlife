@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApp } from '@/state/AppProvider';
 import { font, HIT } from '@/theme';
@@ -13,6 +14,14 @@ import { font, HIT } from '@/theme';
  */
 export default function TabsLayout() {
   const { theme } = useApp();
+  // A fixed per-platform guess (previously 28pt on iOS, 8dp on Android) only
+  // ever matched one specific home-indicator/nav-bar height. Android's
+  // varies by device and is 0 on none of them once edge-to-edge rendering is
+  // in play (the OS default since Android 15), so a flat 8dp regularly sat
+  // the tab bar's labels under the system nav bar instead of above it. The
+  // real inset from SafeAreaProvider (mounted in app/_layout.tsx) is correct
+  // on both platforms and needs no per-OS branch.
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -24,9 +33,9 @@ export default function TabsLayout() {
           backgroundColor: theme.card,
           borderTopColor: theme.cardBorder,
           borderTopWidth: StyleSheet.hairlineWidth,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          height: 54 + insets.bottom,
           paddingTop: 6,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          paddingBottom: Math.max(insets.bottom, 8),
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarItemStyle: { minHeight: HIT },
