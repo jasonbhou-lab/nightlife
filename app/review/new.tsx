@@ -11,7 +11,7 @@ import {
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
-import { uploadPhoto } from '@/data/repository';
+import { publishReview, uploadPhoto } from '@/data/repository';
 import { pickPhoto } from '@/lib/media';
 import { subRatingDimensions, tagVocabulary } from '@/lib/ratings';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -45,7 +45,7 @@ export default function NewReviewScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { drafts, saveDraft, clearDraft, now, session } = useApp();
-  const { getVenue, addLocalPhoto } = useCatalogue();
+  const { getVenue, addLocalPhoto, reload } = useCatalogue();
 
   const venue = getVenue(id);
   const existing = id ? drafts[id] : undefined;
@@ -63,6 +63,8 @@ export default function NewReviewScreen() {
   const [comped, setComped] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(existing?.savedAt ?? null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const dims = venue ? subRatingDimensions[venue.primary.vertical] : [];
   const photoCount = attachedPhotos.length || existing?.photoCount || 0;
@@ -105,6 +107,34 @@ export default function NewReviewScreen() {
 
   const remaining = Math.max(0, MIN_CHARS - text.trim().length);
   const canSubmit = rating > 0 && vibeRating > 0 && remaining === 0;
+
+  const submitReview = async () => {
+    if (!venue) return;
+    setSubmitting(true);
+    setPublishError(null);
+    const result = await publishReview({
+      venueId: venue.id,
+      rating,
+      vibeRating,
+      subRatings: subs,
+      text,
+      tags,
+      photoCount,
+      comped,
+    });
+    setSubmitting(false);
+    if (!result.ok) {
+      setPublishError(result.error);
+      return;
+    }
+    clearDraft(venue.id);
+    // The venue's rating aggregate and review list live server-side; a full
+    // reload is what actually shows this review, the same fetch-on-write
+    // pattern this app already uses for threads and bookings rather than an
+    // optimistic local patch.
+    reload();
+    setSubmitted(true);
+  };
 
   const tagCount = useMemo(() => Object.values(tags).filter((v) => v != null).length, [tags]);
 
@@ -420,6 +450,11 @@ export default function NewReviewScreen() {
       </View>
 
       <View style={[gutter(), { gap: space.sm }]}>
+        {publishError ? (
+          <Callout tone="danger" icon="alert-circle" title="Could not publish">
+            <Body dim>{publishError}</Body>
+          </Callout>
+        ) : null}
         <Button
           label={
             canSubmit
@@ -431,16 +466,15 @@ export default function NewReviewScreen() {
                   : `${remaining} characters to go`
           }
           full
-          disabled={!canSubmit}
-          onPress={() => {
-            clearDraft(venue.id);
-            setSubmitted(true);
-          }}
+          loading={submitting}
+          disabled={!canSubmit || submitting}
+          onPress={submitReview}
         />
         <Button
           label="Save and finish later"
           variant="ghost"
           full
+          disabled={submitting}
           onPress={() => {
             saveDraft({
               venueId: venue.id,
@@ -459,6 +493,7 @@ export default function NewReviewScreen() {
           label="Discard"
           variant="ghost"
           full
+          disabled={submitting}
           onPress={() =>
             Alert.alert(
               'Discard this review?',
