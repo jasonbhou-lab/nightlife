@@ -347,6 +347,15 @@ export type ModerationActionRow = {
   created_at: string;
 };
 
+export type VenueAttributeHistoryRow = {
+  id: string;
+  venue_id: string;
+  changed_by: string | null;
+  changed_at: string;
+  previous_attributes: Json;
+  previous_meta: Json;
+};
+
 export type VenueEventRow = {
   id: string;
   venue_id: string;
@@ -519,6 +528,12 @@ export type Database = {
         Row: VenueEventRow;
         Insert: Insertable<VenueEventRow, 'id' | 'created_at'>;
         Update: Partial<VenueEventRow>;
+        Relationships: [];
+      };
+      venue_attribute_history: {
+        Row: VenueAttributeHistoryRow;
+        Insert: Insertable<VenueAttributeHistoryRow, 'id' | 'changed_at'>;
+        Update: Partial<VenueAttributeHistoryRow>;
         Relationships: [];
       };
     };

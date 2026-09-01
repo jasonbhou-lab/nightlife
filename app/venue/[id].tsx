@@ -764,7 +764,12 @@ export default function VenueProfile() {
 
       {/* Structured attributes with provenance. */}
       <View style={gutter()}>
-        <SectionHeader title="Everything else" subtitle="Grouped, with where each value came from" />
+        <SectionHeader
+          title="Everything else"
+          subtitle="Grouped, with where each value came from"
+          actionLabel={isManagingVenue(venue.id) ? 'Edit' : undefined}
+          onAction={isManagingVenue(venue.id) ? () => router.push(`/venue/attributes?venueId=${venue.id}`) : undefined}
+        />
         <AttributePanel venue={venue} />
       </View>
 

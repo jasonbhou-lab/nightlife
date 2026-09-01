@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Card, Divider, KeyValue, Label } from '@/components/ui';
-import { attributesForVertical, groupLabels } from '@/data/attributes';
+import { attributesForVertical, groupLabels, groupOrderForVertical } from '@/data/attributes';
 import { formatAttribute, freshness, metaFor, provenanceLabel } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, space } from '@/theme';
@@ -35,15 +35,7 @@ export function AttributePanel({ venue }: { venue: Venue }) {
       map.set(d.group, list);
     }
     // Put the groups that matter most for this vertical first.
-    const order: AttributeGroup[] = venue.primary.vertical === 'cigar'
-      ? ['humidor', 'smoking', 'drink', 'entry', 'seating', 'money', 'food', 'entertainment', 'crowd', 'access']
-      : venue.primary.vertical === 'nightclub'
-        ? ['entry', 'money', 'entertainment', 'crowd', 'seating', 'smoking', 'access', 'drink', 'food', 'humidor']
-        : venue.primary.vertical === 'bar'
-          ? ['drink', 'entertainment', 'seating', 'crowd', 'food', 'money', 'entry', 'smoking', 'access', 'humidor']
-          : venue.primary.vertical === 'lounge'
-            ? ['money', 'entry', 'entertainment', 'smoking', 'seating', 'drink', 'crowd', 'food', 'access', 'humidor']
-            : ['food', 'seating', 'entry', 'drink', 'money', 'crowd', 'access', 'entertainment', 'smoking', 'humidor'];
+    const order = groupOrderForVertical(venue.primary.vertical);
 
     return order
       .filter((g) => map.has(g))

@@ -477,6 +477,26 @@ export function attributesForVertical(v: Vertical): AttributeDef[] {
   return attributeDefs.filter((d) => d.verticals.length === 0 || d.verticals.includes(v));
 }
 
+/**
+ * Which attribute groups matter most for a vertical, first — shared between
+ * the read-only profile panel and the business editor so the two never show
+ * a different order for the same venue.
+ */
+export function groupOrderForVertical(v: Vertical): AttributeGroup[] {
+  switch (v) {
+    case 'cigar':
+      return ['humidor', 'smoking', 'drink', 'entry', 'seating', 'money', 'food', 'entertainment', 'crowd', 'access'];
+    case 'nightclub':
+      return ['entry', 'money', 'entertainment', 'crowd', 'seating', 'smoking', 'access', 'drink', 'food', 'humidor'];
+    case 'bar':
+      return ['drink', 'entertainment', 'seating', 'crowd', 'food', 'money', 'entry', 'smoking', 'access', 'humidor'];
+    case 'lounge':
+      return ['money', 'entry', 'entertainment', 'smoking', 'seating', 'drink', 'crowd', 'food', 'access', 'humidor'];
+    default:
+      return ['food', 'seating', 'entry', 'drink', 'money', 'crowd', 'access', 'entertainment', 'smoking', 'humidor'];
+  }
+}
+
 export function filterableForVerticals(vs: Vertical[]): AttributeDef[] {
   const active = vs.length ? vs : (['dining', 'bar', 'lounge', 'cigar', 'nightclub'] as Vertical[]);
   return attributeDefs.filter(

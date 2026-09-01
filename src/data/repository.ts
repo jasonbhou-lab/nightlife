@@ -20,10 +20,11 @@ import type {
   VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
-  AdCampaign, Booking, BusinessInvite, BusinessReplyTemplate, ClaimableBusinessRole, ContentReport,
-  HappyHourWindow, InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction,
-  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueClaim,
-  VenueClaimStatus, VenueEvent, VenueEventKind, VenueOffer,
+  AdCampaign, AttributeMeta, AttributeValue, Booking, BusinessInvite, BusinessReplyTemplate,
+  ClaimableBusinessRole, ContentReport, HappyHourWindow, InvitableBusinessRole, MenuSection,
+  Message, MessageThread, ModerationAction, Photo, PlatformRole, ReportReason, Review, Schedule,
+  Venue, VenueAnalyticsEvent, VenueAttributeHistoryEntry, VenueClaim, VenueClaimStatus, VenueEvent,
+  VenueEventKind, VenueOffer,
 } from '@/types';
 
 /**
@@ -1108,9 +1109,11 @@ export async function updateVenueMenus(input: {
 }
 
 /**
- * F-BIZ-03 (scoped way down): tagline and about only, not the full typed
- * attribute registry with change history — see the migration header on
- * 20260825190000_add_venue_listing_edit.sql.
+ * F-BIZ-03: tagline and about — the two free-text fields, edited separately
+ * from the typed attribute registry below. See the migration header on
+ * 20260825190000_add_venue_listing_edit.sql for why: tagline/about carry no
+ * per-field provenance the way attributes do, so there is nothing else that
+ * migration needed to touch.
  */
 export async function updateVenueListing(input: {
   venueId: string;
@@ -1124,6 +1127,71 @@ export async function updateVenueListing(input: {
     .eq('id', input.venueId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * F-BIZ-03 (full): overwrite a managed venue's typed attributes — the
+ * registry `src/data/attributes.ts` already drives for the filter sheet and
+ * the profile panel. The client never sends `attribute_meta`;
+ * venues_guard_owner_write() computes it from the diff between the old and
+ * new `attributes` (source: 'owner', updatedAt: today, only for keys that
+ * actually changed) and logs the prior state to `venue_attribute_history` —
+ * see 20260830100000_add_venue_attribute_edit.sql. This returns the row's
+ * resulting `attributes`/`meta` rather than trusting `input.attributes`,
+ * since the server, not this function, decides what the meta ends up being.
+ */
+export async function updateVenueAttributes(input: {
+  venueId: string;
+  attributes: Record<string, AttributeValue>;
+}): Promise<
+  | { ok: true; attributes: Record<string, AttributeValue>; meta: Record<string, AttributeMeta> }
+  | { ok: false; error: string }
+> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; attributes could not be updated.' };
+  const { data, error } = await supabase
+    .from('venues')
+    .update({ attributes: input.attributes as never })
+    .eq('id', input.venueId)
+    .select('attributes, attribute_meta')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    attributes: asRecord(data.attributes) as Record<string, AttributeValue>,
+    meta: asRecord(data.attribute_meta) as Record<string, AttributeMeta>,
+  };
+}
+
+/**
+ * F-BIZ-03 (full): this venue's attribute-change history, newest first. Each
+ * entry is the state immediately *before* that edit — what "restore this
+ * version" (calling `updateVenueAttributes` again with it) puts back. RLS
+ * restricts this to an account that manages the venue
+ * (venue_attribute_history_business_read); there is no broader read path.
+ */
+export async function getVenueAttributeHistory(venueId: string): Promise<VenueAttributeHistoryEntry[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('venue_attribute_history')
+    .select('id, changed_at, changed_by, previous_attributes, previous_meta')
+    .eq('venue_id', venueId)
+    .order('changed_at', { ascending: false });
+  const rows = data ?? [];
+  if (!rows.length) return [];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.changed_by).filter((id): id is string => id != null)));
+  const { data: profileRows } = userIds.length
+    ? await supabase.from('profiles').select('id, display_name').in('id', userIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+
+  return rows.map((row) => ({
+    id: row.id,
+    changedAt: row.changed_at,
+    changedByName: row.changed_by ? (nameById[row.changed_by] ?? null) : null,
+    attributes: asRecord(row.previous_attributes) as Record<string, AttributeValue>,
+    meta: asRecord(row.previous_meta) as Record<string, AttributeMeta>,
+  }));
 }
 
 /**

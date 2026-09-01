@@ -5,7 +5,8 @@ import { events as seedEvents } from '@/data/events';
 import { reviews as seedReviews } from '@/data/reviews';
 import { venues as seedVenues } from '@/data/venues';
 import type {
-  AdCampaign, HappyHourWindow, MenuSection, Photo, Review, Schedule, Venue, VenueEvent, VenueOffer,
+  AdCampaign, AttributeMeta, AttributeValue, HappyHourWindow, MenuSection, Photo, Review, Schedule,
+  Venue, VenueEvent, VenueOffer,
 } from '@/types';
 
 /**
@@ -70,6 +71,17 @@ type CatalogueCtx = {
    * without waiting on a full `reload()`. See repository.updateVenueListing.
    */
   setVenueListing: (venueId: string, tagline: string, about: string) => void;
+  /**
+   * F-BIZ-03 (full): reflect a just-saved attribute edit in this session
+   * without waiting on a full `reload()`. Takes the server's resulting
+   * attributes/meta, not the request's, since venues_guard_owner_write()
+   * computes meta itself — see repository.updateVenueAttributes.
+   */
+  setVenueAttributes: (
+    venueId: string,
+    attributes: Record<string, AttributeValue>,
+    meta: Record<string, AttributeMeta>,
+  ) => void;
   /**
    * F-BIZ-07: reflect a just-saved review alert threshold in this session
    * without waiting on a full `reload()`. See repository.setVenueReviewAlertThreshold.
@@ -178,6 +190,13 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
   const setVenueListing = useCallback((venueId: string, tagline: string, about: string) => {
     setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, tagline, about } : v)));
   }, []);
+
+  const setVenueAttributes = useCallback(
+    (venueId: string, attributes: Record<string, AttributeValue>, meta: Record<string, AttributeMeta>) => {
+      setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, attributes, meta } : v)));
+    },
+    [],
+  );
 
   const setVenueReviewAlertThreshold = useCallback((venueId: string, threshold: number | undefined) => {
     setVenues((prev) => prev.map((v) => (v.id === venueId ? { ...v, reviewAlertThreshold: threshold } : v)));
@@ -304,6 +323,7 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
       setVenueHours,
       setVenueMenus,
       setVenueListing,
+      setVenueAttributes,
       setVenueReviewAlertThreshold,
       addVenueOffer,
       removeVenueOffer,
@@ -318,7 +338,7 @@ export function CatalogueProvider({ children }: { children: React.ReactNode }) {
     [
       venues, events, reviews, source, error, loading, reload, venueById, reviewsByVenue,
       eventsByVenue, addLocalPhoto, markVenueClaimed, setReviewOwnerResponse, setVenueHours,
-      setVenueMenus, setVenueListing, setVenueReviewAlertThreshold, addVenueOffer, removeVenueOffer,
+      setVenueMenus, setVenueListing, setVenueAttributes, setVenueReviewAlertThreshold, addVenueOffer, removeVenueOffer,
       addAdCampaign, removeAdCampaign,
       setReviewRecommended, setVenueConsumerAlert, setVenueContributionFrozen, setVenuePhotoCover,
       setVenuePhotoOrder,

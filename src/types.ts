@@ -62,6 +62,22 @@ export type AttributeDef = {
 
 export type AttributeMeta = { source: Provenance; updatedAt: string };
 
+/**
+ * F-BIZ-03 (full): one row per business edit that actually changed a venue's
+ * attributes, holding the state immediately *before* that edit — so
+ * `attributes`/`meta` here is what a rollback restores *to*, not what the
+ * edit changed it into. See venues_guard_owner_write() in
+ * 20260830100000_add_venue_attribute_edit.sql for why this is populated
+ * server-side rather than something a client ever writes directly.
+ */
+export type VenueAttributeHistoryEntry = {
+  id: string;
+  changedAt: string;
+  changedByName: string | null;
+  attributes: Record<string, AttributeValue>;
+  meta: Record<string, AttributeMeta>;
+};
+
 /** A named schedule. Bars keep kitchen hours separately (PRD F-PROFILE-06). */
 export type ScheduleKind = 'venue' | 'kitchen' | 'bar' | 'retail' | 'lounge';
 

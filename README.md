@@ -38,7 +38,7 @@ Phase 1 and Phase 2 **consumer** scope from the PRD, against a seeded Houston da
 | Events | F-EVENT-01 through 06 |
 | Messaging | F-MSG-01, 02 (scoped), 03, 04 |
 | Notifications | F-NOTIF-01 through 04 (preference surface) |
-| Business portal | F-BIZ-01, 03, 04, 05, 06, 07, 09, 10, 11, 13, 15 (each scoped down — see below) |
+| Business portal | F-BIZ-01, 03 (full), 04, 05, 06, 07, 09, 10, 11, 13, 15 (rest scoped down — see below) |
 | Trust & Safety | F-TRUST-01, 04, 06, 08 (scoped — see below) |
 | Usability | U-01 through U-11 (not U-12 — see *What is deliberately not implemented*) |
 
@@ -84,6 +84,18 @@ Reserve button.
 the rating and the default view but remain reachable behind a disclosed link, with no per-review
 rationale exposed. Comped visits carry a disclosure badge. The aggregate rating weights recency,
 reviewer trust, and detail, and the plain-language explanation of that is published in the app.
+
+**The composer's "Publish review" button used to do nothing real** (`app/review/new.tsx`). It
+called `clearDraft` and jumped straight to the "Published" success screen — `publishReview()`
+(`src/data/repository.ts`) already existed, already inserted a real row, and was never called from
+here. No review written through this screen had ever actually reached the database; the draft was
+simply discarded and the app lied about the rest. Now wired for real: the button calls
+`publishReview`, shows a loading state while it's in flight, and — with no backend configured, the
+one case this could not previously be told apart from a real publish — surfaces the actual failure
+in a callout instead of the same fake success screen, leaving the draft intact so nothing already
+typed is lost. A successful publish triggers a full catalogue `reload()` rather than an optimistic
+local patch, the same fetch-on-write pattern already used for threads and bookings, since there is
+no local append path for a freshly published review the way `addLocalPhoto` exists for photos.
 
 **Vibe Rating** (`src/components/Flames.tsx`, `Review.vibeRating`, `Venue.vibeRating`). A second
 1-5 rating axis — energy/atmosphere rather than quality — given the exact same treatment as the
@@ -491,6 +503,40 @@ version of this migration rejected every tagline edit outright for changing a co
 know was a legitimate side effect. Fixed by adding `search_text` to the allowlist alongside
 `tagline` itself.
 
+**Attribute editor and change history** (`app/venue/attributes.tsx`, `app/venue/attribute-history.tsx`,
+F-BIZ-03, full). The listing editor above was scoped down to tagline/about specifically because the
+rest — every Section 3 typed attribute, with change history and rollback — was a real, separate
+feature. This is that feature: every field `src/data/attributes.ts` defines for a venue's vertical
+(dozens, across boolean, enum, multi-select, integer, currency, and time types) is editable, grouped
+and ordered identically to the read-only profile panel (both now call the registry's own
+`groupOrderForVertical` rather than each keeping their own copy of the ordering, after the second one
+very nearly drifted from the first while this was being built).
+
+Two things a client-submitted write is never trusted with, because both are trust signals rendered
+to every consumer, not cosmetic labels: provenance and history. `venues_guard_owner_write()`
+(`20260830100000_add_venue_attribute_edit.sql`) computes `attribute_meta` itself from the diff
+between the old and new `attributes` — `source: 'owner', updatedAt: today`, only for keys that
+actually changed — rather than accepting whatever the client sends; a client that could set its own
+`updatedAt` could claim any stale value as freshly confirmed, and one that could set its own `source`
+could claim a self-report as `operator_verified`. The same diff pass logs the state immediately
+*before* every real change to `venue_attribute_history`. Rollback is not a special code path — the
+history screen's "Restore this version" calls the same `updateVenueAttributes` an ordinary edit
+does, with an old snapshot's values, which itself logs a fresh history row for the state right
+before the restore, exactly like any other edit would.
+
+Verified before this was ever applied for real, the same way the invite feature's RLS was: `auth.uid()`
+reads `current_setting('request.jwt.claim.sub', true)`, which a `BEGIN`/`ROLLBACK` transaction can set
+directly, so the full path — a real business-role holder, a real venue, a real diff — was exercised
+against live data without a live session, and rolled back rather than committed. That caught nothing
+this time (the design held), but it's what confirmed removing an attribute correctly drops its meta
+entry too, that an untouched key resubmitted with its unchanged value never gets a spurious
+timestamp bump, and that a disallowed column write still fails exactly as before. Out of scope, on
+purpose: attribute *keys* are not schema-validated at the database level — the jsonb column accepts
+whatever object the client sends, the same trust boundary this build already applies to `schedules`
+and `menus`. The registry-driven editor is what keeps a legitimate client from ever sending anything
+else; a client that bypassed the app entirely could write garbage keys the UI would just never
+render, not a new capability an already-untrusted caller wouldn't otherwise have.
+
 **Own-data export** (`src/lib/export.ts`, F-BIZ-15, scoped). A managing account downloads its own
 venue's reviews received, media, and listing basics as JSON. Left out on purpose: "analytics" —
 there is no page-view/impression tracking anywhere in this build to export, the same honesty gap
@@ -648,13 +694,12 @@ Postgres happened to return, not a real sort.
 - **Business portal and internal tooling** (F-BIZ, F-ADMIN). Out of scope for a consumer client;
   the PRD makes web the primary surface for these. Their consumer-visible *outputs* are
   implemented: Consumer Alert banners, owner-answer badges, paid-placement labels,
-  claimed/unclaimed states, closure and successor handling. Fifteen exceptions are real, scoped-down
+  claimed/unclaimed states, closure and successor handling. Fourteen exceptions are real, scoped-down
   business-portal actions rather than just consumer-visible outputs: F-BIZ-01's claim step
   (self-attestation gated behind admin approval, not the PRD's actual multi-path verification),
   F-BIZ-02's ownership transfer (cooperative, via invite) and dispute (adversarial, via the same
   admin queue as a fresh claim, evidence required) — no defined SLA, either, same reasoning as
-  F-BIZ-01, F-BIZ-03's tagline/about editor
-  (not the full typed attribute registry, and no change history/rollback), F-BIZ-04's
+  F-BIZ-01, F-BIZ-04's
   hours/happy-hour editor (no bulk/multi-location, no closure scheduling), F-BIZ-05's menu/tap-list
   editor (no CSV/PDF/photo import), F-BIZ-06's cover photo and reorder (owner-credited photos only,
   same as F-MEDIA-06 draws it), F-BIZ-07's review response composer and threshold-based alerting (no
