@@ -28,7 +28,7 @@ export default function ProfileScreen() {
     session, signOut, deleteAccount, verifyAge, themeSetting, setThemeSetting, prefs, setPrefs,
     bookings, cancelBooking, drafts, clearDraft, clockOverride, setClockOverride, now, threads,
     followedMemberIds, followedVenueIds, checkIns, addManagedVenue, isModerator, isTrustSafety,
-    isAdmin,
+    isAdmin, dmThreads,
   } = useApp();
   const { reviews, venueById, source } = useCatalogue();
 
@@ -346,6 +346,26 @@ export default function ProfileScreen() {
                 <Text style={[font.cardTitle, { color: theme.text }]}>
                   {threads.filter((t) => !t.blocked).length} open conversation
                   {threads.filter((t) => !t.blocked).length === 1 ? '' : 's'}
+                </Text>
+                <Body dim style={{ marginTop: 2 }}>Tap to see them all</Body>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
+            </View>
+          </Card>
+        </View>
+      ) : null}
+
+      {/* Real user-to-user chat, gated to mutual follows. */}
+      {dmThreads.length ? (
+        <View style={gutter()}>
+          <SectionHeader title="Direct messages" subtitle={`${dmThreads.length} conversation${dmThreads.length === 1 ? '' : 's'}`} actionLabel="All" onAction={() => router.push('/dm')} />
+          <Card onPress={() => router.push('/dm')}>
+            <View style={[ui.row, { gap: space.md }]}>
+              <IconBadge icon="people" size={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={[font.cardTitle, { color: theme.text }]}>
+                  {dmThreads.filter((t) => !t.blocked).length} open conversation
+                  {dmThreads.filter((t) => !t.blocked).length === 1 ? '' : 's'}
                 </Text>
                 <Body dim style={{ marginTop: 2 }}>Tap to see them all</Body>
               </View>

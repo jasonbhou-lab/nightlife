@@ -356,6 +356,38 @@ export type VenueAttributeHistoryRow = {
   previous_meta: Json;
 };
 
+export type FollowRow = {
+  follower_id: string;
+  followee_id: string;
+  created_at: string;
+};
+
+export type CheckInRow = {
+  id: string;
+  user_id: string;
+  venue_id: string;
+  visibility: 'private' | 'friends';
+  note: string | null;
+  created_at: string;
+};
+
+export type DmThreadRow = {
+  id: string;
+  user_a: string;
+  user_b: string;
+  blocked: boolean;
+  created_at: string;
+  last_message_at: string;
+};
+
+export type DmMessageRow = {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+};
+
 export type VenueEventRow = {
   id: string;
   venue_id: string;
@@ -534,6 +566,30 @@ export type Database = {
         Row: VenueAttributeHistoryRow;
         Insert: Insertable<VenueAttributeHistoryRow, 'id' | 'changed_at'>;
         Update: Partial<VenueAttributeHistoryRow>;
+        Relationships: [];
+      };
+      follows: {
+        Row: FollowRow;
+        Insert: Insertable<FollowRow, 'created_at'>;
+        Update: Partial<FollowRow>;
+        Relationships: [];
+      };
+      check_ins: {
+        Row: CheckInRow;
+        Insert: Insertable<CheckInRow, 'id' | 'created_at' | 'visibility' | 'note'>;
+        Update: Partial<CheckInRow>;
+        Relationships: [];
+      };
+      dm_threads: {
+        Row: DmThreadRow;
+        Insert: Insertable<DmThreadRow, 'id' | 'blocked' | 'created_at' | 'last_message_at'>;
+        Update: Partial<DmThreadRow>;
+        Relationships: [];
+      };
+      dm_messages: {
+        Row: DmMessageRow;
+        Insert: Insertable<DmMessageRow, 'id' | 'created_at'>;
+        Update: Partial<DmMessageRow>;
         Relationships: [];
       };
     };

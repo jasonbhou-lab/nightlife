@@ -6,16 +6,19 @@ import React, {
 import { useColorScheme } from 'react-native';
 
 import {
-  cancelBookingRemote, completeAuthFromUrl, createMessageThread, deleteOwnAccount, getAuthSnapshot,
-  getManagedVenueIds, getPlatformRoles, getThreadMessages, onAuthSignedOut, sendMessage as sendMessageRemote,
-  sendSignInCode as sendSignInCodeRemote, signInWithGoogle as signInWithGoogleRemote,
-  signOutRemote, verifySignInCode as verifySignInCodeRemote, type AuthProfile,
+  blockDmThread, blockMessageThread, cancelBookingRemote, checkIn as checkInRemote,
+  completeAuthFromUrl, createMessageThread, deleteOwnAccount, followUser as followUserRemote,
+  getAuthSnapshot, getDmMessages, getDmThreads, getManagedVenueIds, getMyFollowGraph,
+  getPlatformRoles, getThreadMessages, onAuthSignedOut, sendDmMessage, sendMessage as sendMessageRemote,
+  sendSignInCode as sendSignInCodeRemote, signInWithGoogle as signInWithGoogleRemote, signOutRemote,
+  startDmThread, unfollowUser as unfollowUserRemote, verifySignInCode as verifySignInCodeRemote,
+  type AuthProfile,
 } from '@/data/repository';
 import { emptyFilters } from '@/lib/search';
 import { hasBackend } from '@/lib/supabase';
 import { darkTheme, lightTheme, type Theme, type ThemeMode } from '@/theme';
 import type {
-  Booking, CheckIn, CheckInVisibility, Collection, FilterState, Message, MessageThread,
+  Booking, CheckIn, CheckInVisibility, Collection, DmThread, FilterState, Message, MessageThread,
   MessageThreadKind, PlatformRole, Preferences, QuoteIntake, ReviewDraft, SessionRole,
 } from '@/types';
 
@@ -164,6 +167,23 @@ type Ctx = {
   checkIns: CheckIn[];
   addCheckIn: (venueId: string, visibility: CheckInVisibility, note?: string) => CheckIn;
 
+  /**
+   * F-SOCIAL-02 (full) / F-SOCIAL-05 (full) / F-MSG-05 (reversed): a real
+   * follow graph between real accounts, distinct from the seeded-community
+   * `followedMemberIds` above. This is what a 'friends'-visibility check-in
+   * and starting a DM thread are actually gated on — see
+   * 20260901100000_add_follows_checkins_dm.sql.
+   */
+  isFollowingUser: (userId: string) => boolean;
+  isMutualWith: (userId: string) => boolean;
+  toggleFollowUser: (userId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Real consumer-to-consumer messages, gated to mutual follows. */
+  dmThreads: DmThread[];
+  startDm: (otherUserId: string) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+  sendDm: (threadId: string, text: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  blockDm: (threadId: string) => Promise<void>;
+  refreshDmThread: (threadId: string) => Promise<void>;
+
   bookings: Booking[];
   addBooking: (b: Booking) => void;
   cancelBooking: (id: string) => void;
@@ -255,6 +275,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [managedVenueIds, setManagedVenueIds] = useState<string[]>([]);
   const [platformRoles, setPlatformRoles] = useState<PlatformRole[]>([]);
   const [authCallbackError, setAuthCallbackError] = useState<string | null>(null);
+  const [realFollowing, setRealFollowing] = useState<string[]>([]);
+  const [realFollowedBy, setRealFollowedBy] = useState<string[]>([]);
+  const [dmThreads, setDmThreads] = useState<DmThread[]>([]);
 
   const persist = useCallback((key: string, value: unknown) => {
     AsyncStorage.setItem(key, JSON.stringify(value)).catch(() => {
@@ -287,6 +310,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [updateSession],
   );
+
+  /**
+   * Real follow graph and DM inbox, loaded alongside managedVenueIds/
+   * platformRoles at every point this app already re-syncs those: initial
+   * hydrate and every successful real sign-in. Best-effort — a failure here
+   * should not block sign-in the way a failed profile fetch would.
+   */
+  const loadSocialGraph = useCallback(() => {
+    getMyFollowGraph()
+      .then(({ following, followedBy }) => {
+        setRealFollowing(following);
+        setRealFollowedBy(followedBy);
+      })
+      .catch(() => {});
+    getDmThreads().then(setDmThreads).catch(() => {});
+  }, []);
 
   /* ------------------------------------------------------------- hydrate */
   useEffect(() => {
@@ -346,6 +385,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             applyAuthProfile(snapshot);
             setManagedVenueIds(await getManagedVenueIds());
             setPlatformRoles(await getPlatformRoles());
+            loadSocialGraph();
           } else {
             setSession(defaultSession);
             persist(KEYS.session, defaultSession);
@@ -365,6 +405,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       persist(KEYS.session, defaultSession);
       setManagedVenueIds([]);
       setPlatformRoles([]);
+      setRealFollowing([]);
+      setRealFollowedBy([]);
+      setDmThreads([]);
     });
   }, [persist]);
 
@@ -396,6 +439,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       applyAuthProfile(result.profile);
       getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
       getPlatformRoles().then(setPlatformRoles).catch(() => {});
+      loadSocialGraph();
     };
     Linking.getInitialURL().then((url) => {
       if (url) handle(url);
@@ -450,6 +494,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       applyAuthProfile(result.profile);
       getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
       getPlatformRoles().then(setPlatformRoles).catch(() => {});
+      loadSocialGraph();
       return { ok: true };
     },
     [applyAuthProfile],
@@ -466,6 +511,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     applyAuthProfile(result.profile);
     getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
     getPlatformRoles().then(setPlatformRoles).catch(() => {});
+    loadSocialGraph();
     return { ok: true };
   }, [applyAuthProfile]);
 
@@ -474,6 +520,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     persist(KEYS.session, defaultSession);
     setManagedVenueIds([]);
     setPlatformRoles([]);
+    setRealFollowing([]);
+    setRealFollowedBy([]);
+    setDmThreads([]);
     if (hasBackend) signOutRemote().catch(() => {});
   }, [persist]);
 
@@ -739,8 +788,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [threads, writeThreads],
   );
 
+  /**
+   * Real fix, not a new feature: this previously only ever set `blocked` in
+   * local state. message_threads_own's RLS already permitted this update —
+   * nothing here just ever called it — so a "blocked" thread stayed blocked
+   * only on the device that blocked it, not past a reinstall or a second
+   * device, while the business side could still write into it the whole
+   * time. See repository.blockMessageThread.
+   */
   const blockThread = useCallback(
-    (threadId: string) => writeThreads(threads.map((t) => (t.id === threadId ? { ...t, blocked: true } : t))),
+    (threadId: string) => {
+      writeThreads(threads.map((t) => (t.id === threadId ? { ...t, blocked: true } : t)));
+      if (isRemoteId(threadId)) {
+        blockMessageThread(threadId).catch(() => {
+          /* Best-effort mirror. The block already lives on this device. */
+        });
+      }
+    },
     [threads, writeThreads],
   );
 
@@ -816,7 +880,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [follows, writeFollows],
   );
 
-  /* ------------------------------------------------------------ check-ins */
+  /* ------------------------------------------------------ real follows/DMs */
+  const isFollowingUser = useCallback((userId: string) => realFollowing.includes(userId), [realFollowing]);
+
+  const isMutualWith = useCallback(
+    (userId: string) => realFollowing.includes(userId) && realFollowedBy.includes(userId),
+    [realFollowing, realFollowedBy],
+  );
+
+  const toggleFollowUser = useCallback(
+    async (userId: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const currentlyFollowing = realFollowing.includes(userId);
+      const result = currentlyFollowing ? await unfollowUserRemote(userId) : await followUserRemote(userId);
+      if (!result.ok) return result;
+      setRealFollowing((prev) => (currentlyFollowing ? prev.filter((id) => id !== userId) : [...prev, userId]));
+      return { ok: true };
+    },
+    [realFollowing],
+  );
+
+  const startDm = useCallback(
+    async (otherUserId: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> => {
+      const result = await startDmThread(otherUserId);
+      if (!result.ok) return result;
+      if (!dmThreads.some((t) => t.id === result.id)) {
+        getDmThreads().then(setDmThreads).catch(() => {});
+      }
+      return result;
+    },
+    [dmThreads],
+  );
+
+  const refreshDmThread = useCallback(async (threadId: string) => {
+    const messages = await getDmMessages(threadId);
+    setDmThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, messages } : t)));
+  }, []);
+
+  const sendDm = useCallback(
+    async (threadId: string, text: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const trimmed = text.trim();
+      if (!trimmed) return { ok: false, error: 'Write something first.' };
+      const result = await sendDmMessage({ threadId, text: trimmed });
+      if (!result.ok) return result;
+      // Patched locally rather than re-fetched via getDmThreads(), which
+      // always returns messages: [] — a re-fetch here would immediately wipe
+      // out whatever refreshDmThread below just loaded.
+      const nowIso = new Date().toISOString();
+      setDmThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, lastMessageAt: nowIso } : t)));
+      await refreshDmThread(threadId);
+      return { ok: true };
+    },
+    [refreshDmThread],
+  );
+
+  const blockDm = useCallback(async (threadId: string) => {
+    setDmThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, blocked: true } : t)));
+    await blockDmThread(threadId).catch(() => {});
+  }, []);
+
+  /**
+   * F-SOCIAL-05 (full): the local id here (`ci-<timestamp>`) never gets
+   * reconciled with the real row's uuid once mirrored — this array is only
+   * ever "my own check-in history" display, never read back from the
+   * server, so the two ids diverging is harmless, the same tradeoff
+   * `sendThreadMessage`'s best-effort mirror already accepts for messages.
+   * What actually matters for `getVenueCheckIns` (who else can see this) is
+   * that the write reaches the real `check_ins` table at all.
+   */
   const addCheckIn = useCallback(
     (venueId: string, visibility: CheckInVisibility, note?: string): CheckIn => {
       const checkIn: CheckIn = { id: `ci-${Date.now()}`, venueId, date: new Date().toISOString(), visibility, note };
@@ -825,6 +955,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         persist(KEYS.checkins, next);
         return next;
       });
+      if (hasBackend) {
+        checkInRemote({ venueId, visibility, note }).catch(() => {
+          /* Best-effort mirror. The check-in already lives on this device. */
+        });
+      }
       return checkIn;
     },
     [persist],
@@ -905,6 +1040,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleFollowMember,
       isFollowingVenue,
       toggleFollowVenue,
+      isFollowingUser,
+      isMutualWith,
+      toggleFollowUser,
+      dmThreads,
+      startDm,
+      sendDm,
+      blockDm,
+      refreshDmThread,
       checkIns,
       addCheckIn,
       bookings,
@@ -931,6 +1074,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
       follows, isFollowingMember, toggleFollowMember, isFollowingVenue, toggleFollowVenue,
+      isFollowingUser, isMutualWith, toggleFollowUser, dmThreads, startDm, sendDm, blockDm, refreshDmThread,
       checkIns, addCheckIn, bookings, addBooking, cancelBooking,
       threads, startThread, sendThreadMessage, blockThread, refreshThread, drafts,
       saveDraft, clearDraft, prefs, setPrefs, now, clockOverride,

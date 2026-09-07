@@ -49,6 +49,8 @@ function Shell() {
         <Stack.Screen name="collection/[id]" />
         <Stack.Screen name="messages/index" />
         <Stack.Screen name="messages/[id]" />
+        <Stack.Screen name="dm/index" />
+        <Stack.Screen name="dm/[userId]" />
         <Stack.Screen name="community/index" />
         <Stack.Screen name="community/[id]" />
         <Stack.Screen name="photo/new" options={{ animation: 'slide_from_bottom' }} />

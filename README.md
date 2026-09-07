@@ -240,6 +240,23 @@ collaborator list, not just a `shared`-by-link flag with no one behind it — th
 one collection with a contribution pre-attributed to a community member, since a fresh local-only
 collection could otherwise never show that the model supports it.
 
+**Real follows, check-ins, and direct messages** (`app/dm/`, `follows`/`check_ins`/`dm_threads`/
+`dm_messages` tables). Everything in the previous paragraph is the seeded/offline community system
+and stays exactly as described there — it is a deliberately separate, untouched data path. This is
+the real one, added on top: an actual account can follow another actual account
+(`toggleFollowUser`), a check-in written from a venue page can be seen by other real accounts
+(`checkIn`/`getVenueCheckIns`), and two accounts can message each other (`app/dm/[userId].tsx`),
+all three gated the same way — visibility or thread creation requires the follow to be mutual,
+checked server-side by `private.are_mutual_follows()`, never trusted from the client. That gate is
+checked once, at check-in-read time or thread-creation time, not re-checked on every later message
+or every later check-in read — the same one-time-check pattern the existing business-invite flow
+already uses. A DM thread is keyed by the pair of accounts (`user_a < user_b`, enforced by a CHECK
+constraint) rather than by a client-generated thread id, so "find my thread with this person, or
+create it" can never race into two duplicate threads. Rate limiting, blocking, and the report flow
+on a DM thread mirror the existing venue-message thread's controls exactly (same 5-second/40-per-hour
+trigger shape, same block-then-reject-further-writes behavior) — abuse controls a nightlife app's
+real-user chat needs just as much as its venue chat does, arguably more.
+
 **Photo upload** (`app/photo/new.tsx`, `src/lib/media.ts`, F-MEDIA-01). A real upload path, not a
 count-only stepper: pick from the camera or the library, and the image is re-encoded through
 `expo-image-manipulator` before it ever reaches the network — producing a new JPEG drops embedded

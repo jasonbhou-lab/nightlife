@@ -15,7 +15,7 @@ import {
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
 import {
-  logVenueEvent, requestPhotoRemoval, setConsumerAlert, setContributionFrozen,
+  getVenueCheckIns, logVenueEvent, requestPhotoRemoval, setConsumerAlert, setContributionFrozen,
 } from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
 import { isPromotedNow } from '@/lib/advertising';
@@ -30,7 +30,7 @@ import { aggregateFor, subRatingDimensions } from '@/lib/ratings';
 import { verticalsOf } from '@/lib/search';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
-import type { Photo, Venue } from '@/types';
+import type { Photo, Venue, VenueCheckIn } from '@/types';
 
 export default function VenueProfile() {
   const theme = useTheme();
@@ -38,7 +38,7 @@ export default function VenueProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     now, isSaved, toggleSave, session, canBook, attemptContribution, startThread,
-    isFollowingVenue, toggleFollowVenue, addCheckIn, isManagingVenue, isTrustSafety,
+    isFollowingVenue, toggleFollowVenue, addCheckIn, isManagingVenue, isTrustSafety, isMutualWith,
   } = useApp();
   const {
     venues, getVenue, venueReviews, filteredCount, eventsForVenue,
@@ -47,12 +47,21 @@ export default function VenueProfile() {
   const [album, setAlbum] = useState<Photo['album'] | 'all'>('all');
   const [alertDraft, setAlertDraft] = useState<string | null>(null);
   const [tsBusy, setTsBusy] = useState(false);
+  const [venueCheckIns, setVenueCheckIns] = useState<VenueCheckIn[]>([]);
 
   const venue = getVenue(id);
 
   useEffect(() => {
     if (venue) logVenueEvent(venue.id, 'view');
   }, [venue?.id]);
+
+  /** F-SOCIAL-05 (full): re-fetched after checking in below, not just on
+   * mount, so the list reflects your own new check-in immediately rather
+   * than waiting for the next screen visit. */
+  const loadCheckIns = () => {
+    if (venue) getVenueCheckIns(venue.id).then(setVenueCheckIns);
+  };
+  useEffect(loadCheckIns, [venue?.id]);
 
   if (!venue) {
     return (
@@ -224,11 +233,20 @@ export default function VenueProfile() {
       Alert.alert(`Check in at ${venue.name}?`, 'Who can see this?', [
         {
           text: 'Just me',
-          onPress: () => addCheckIn(venue.id, 'private'),
+          onPress: () => {
+            addCheckIn(venue.id, 'private');
+            setTimeout(loadCheckIns, 500);
+          },
         },
         {
-          text: 'Followers can see it',
-          onPress: () => addCheckIn(venue.id, 'friends'),
+          // Precise on purpose: a one-way follower cannot see this, only
+          // someone you mutually follow can — see check_ins_read in
+          // 20260901100000_add_follows_checkins_dm.sql.
+          text: 'People you mutually follow can see it',
+          onPress: () => {
+            addCheckIn(venue.id, 'friends');
+            setTimeout(loadCheckIns, 500);
+          },
         },
         { text: 'Cancel', style: 'cancel' },
       ]),
@@ -497,6 +515,35 @@ export default function VenueProfile() {
             />
             <Button label="Check in" icon="location-outline" variant="ghost" onPress={checkIn} />
           </View>
+
+          {/* F-SOCIAL-05 (full): who's actually checked in that this account
+              is allowed to see — itself, plus any mutual follow who marked
+              their check-in visible. RLS decides who that is; this only
+              renders whatever getVenueCheckIns already filtered down to. */}
+          {venueCheckIns.length ? (
+            <View style={{ marginTop: space.md, gap: space.xs }}>
+              <Label>Checked in</Label>
+              {venueCheckIns.map((c) => (
+                <View key={c.id} style={[ui.row, { gap: space.sm, alignItems: 'center' }]}>
+                  <Ionicons name="location" size={14} color={theme.accent} />
+                  <Text style={[font.small, { color: theme.text, flex: 1 }]} numberOfLines={1}>
+                    {c.isSelf ? 'You' : c.userName}
+                    {c.note ? ` — ${c.note}` : ''}
+                  </Text>
+                  {!c.isSelf && isMutualWith(c.userId) ? (
+                    <Pressable
+                      onPress={() => router.push(`/dm/${c.userId}`)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Message ${c.userName}`}
+                    >
+                      <Ionicons name="chatbubble-outline" size={16} color={theme.textFaint} />
+                    </Pressable>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           {/* Never a dead Reserve button (F-BOOK-09a). */}
           {venue.bookingModes.length === 1 && venue.bookingModes[0] === 'walk_in' ? (

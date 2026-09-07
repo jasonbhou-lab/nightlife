@@ -277,11 +277,20 @@ function ReviewCard({
 }) {
   const theme = useTheme();
   const router = useRouter();
-  const { session, attemptContribution } = useApp();
+  const { session, attemptContribution, isFollowingUser, isMutualWith, toggleFollowUser } = useApp();
   const [voted, setVoted] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState(r.ownerResponse?.text ?? '');
   const [posting, setPosting] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+
+  const toggleFollow = async () => {
+    if (!r.authorId) return;
+    setFollowBusy(true);
+    const result = await toggleFollowUser(r.authorId);
+    setFollowBusy(false);
+    if (!result.ok) Alert.alert('Could not update follow', result.error);
+  };
   const [respondError, setRespondError] = useState<string | null>(null);
   const [reported, setReported] = useState(false);
   const member = communityByName[r.author];
@@ -375,6 +384,30 @@ function ReviewCard({
               {r.edited ? ' · edited' : ''}
             </Text>
           </View>
+          {/* F-SOCIAL-02/F-MSG-05 (real, reversed): follow a real reviewer,
+              and message them once you mutually follow each other. Absent
+              for seed-only reviews and the no-backend mock, neither of which
+              has a real authorId to act on. */}
+          {r.authorId && session.role !== 'guest' ? (
+            isMutualWith(r.authorId) ? (
+              <Button
+                label="Message"
+                icon="chatbubble-outline"
+                variant="ghost"
+                style={{ marginTop: space.sm, alignSelf: 'flex-start' }}
+                onPress={() => router.push(`/dm/${r.authorId}`)}
+              />
+            ) : (
+              <Button
+                label={isFollowingUser(r.authorId) ? 'Following' : 'Follow'}
+                icon={isFollowingUser(r.authorId) ? 'checkmark' : 'person-add-outline'}
+                variant="ghost"
+                loading={followBusy}
+                style={{ marginTop: space.sm, alignSelf: 'flex-start' }}
+                onPress={toggleFollow}
+              />
+            )
+          ) : null}
         </View>
       </View>
 

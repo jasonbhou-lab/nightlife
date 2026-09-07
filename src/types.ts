@@ -359,6 +359,13 @@ export type Review = {
   id: string;
   venueId: string;
   author: string;
+  /**
+   * The real account that wrote this, when there is a backend — absent for
+   * seed-only reviews and for the no-backend local mock. This is what makes
+   * following/messaging a real reviewer possible at all: `author` is only
+   * ever a display-name snapshot, with no guarantee it is even still unique.
+   */
+  authorId?: string;
   /** Drives review weighting (F-REVIEW-08) and Elite badging (R4). */
   authorTrust: number;
   elite: boolean;
@@ -581,6 +588,46 @@ export type CheckIn = {
   note?: string;
   /** Set on seeded community activity; absent on the signed-in user's own check-ins. */
   memberId?: string;
+};
+
+/**
+ * A real check-in at a venue, from a real other account — never the seeded
+ * community roster CheckIn/memberId above. Only ever returned for check-ins
+ * this account is actually allowed to see: its own, or a 'friends'-visibility
+ * one from someone it mutually follows (enforced by check_ins_read in
+ * 20260901100000_add_follows_checkins_dm.sql, not just by this type).
+ */
+export type VenueCheckIn = {
+  id: string;
+  userId: string;
+  userName: string;
+  createdAt: string;
+  note?: string;
+  /** True when this is the signed-in account's own check-in. */
+  isSelf: boolean;
+};
+
+/**
+ * F-MSG-05, reversed: real consumer-to-consumer messaging, gated to accounts
+ * that mutually follow each other — see dm_threads_insert_mutual in
+ * 20260901100000_add_follows_checkins_dm.sql. Modeled on MessageThread
+ * above, with the venue replaced by the other person.
+ */
+export type DmMessage = {
+  id: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+};
+
+export type DmThread = {
+  id: string;
+  otherUserId: string;
+  otherUserName: string;
+  blocked: boolean;
+  createdAt: string;
+  lastMessageAt: string;
+  messages: DmMessage[];
 };
 
 /* ---------------------------------------------------------------- app state */

@@ -16,15 +16,15 @@ import { hasBackend, supabase } from '@/lib/supabase';
 WebBrowser.maybeCompleteAuthSession();
 import type {
   AdCampaignRow, BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow,
-  EventRow, MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow, TableTierRow,
-  VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
+  DmThreadRow, EventRow, MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow,
+  TableTierRow, VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
   AdCampaign, AttributeMeta, AttributeValue, Booking, BusinessInvite, BusinessReplyTemplate,
-  ClaimableBusinessRole, ContentReport, HappyHourWindow, InvitableBusinessRole, MenuSection,
-  Message, MessageThread, ModerationAction, Photo, PlatformRole, ReportReason, Review, Schedule,
-  Venue, VenueAnalyticsEvent, VenueAttributeHistoryEntry, VenueClaim, VenueClaimStatus, VenueEvent,
-  VenueEventKind, VenueOffer,
+  CheckInVisibility, ClaimableBusinessRole, ContentReport, DmMessage, DmThread, HappyHourWindow,
+  InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction, Photo, PlatformRole,
+  ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueAttributeHistoryEntry,
+  VenueCheckIn, VenueClaim, VenueClaimStatus, VenueEvent, VenueEventKind, VenueOffer,
 } from '@/types';
 
 /**
@@ -164,6 +164,7 @@ function mapReview(row: ReviewRow): Review {
     id: row.id,
     venueId: row.venue_id,
     author: row.author_name,
+    authorId: row.author_id ?? undefined,
     authorTrust: Number(row.author_trust),
     elite: row.elite,
     rating: row.rating,
@@ -538,6 +539,258 @@ export async function publishReview(input: {
 
   if (error) return { ok: false, error: error.message };
   return { ok: true, id: data.id };
+}
+
+/* -------------------------------------------------------------- check-ins */
+
+/** "Still out" horizon for `getVenueCheckIns` — the same kind of night-out
+ * time window this app already uses for happy-hour/Tonight-mode framing,
+ * not a real presence signal (a check-in from 3 days ago is not "here now"). */
+const CHECKIN_WINDOW_HOURS = 6;
+
+/**
+ * F-SOCIAL-05 (full): a real check-in. Visible to someone else only when
+ * `visibility: 'friends'` and they mutually follow this account — enforced
+ * by check_ins_read, not by this function. See
+ * 20260901100000_add_follows_checkins_dm.sql.
+ */
+export async function checkIn(input: {
+  venueId: string;
+  visibility: CheckInVisibility;
+  note?: string;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; kept on this device only.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to check in.' };
+  const { data, error } = await supabase
+    .from('check_ins')
+    .insert({ user_id: user.id, venue_id: input.venueId, visibility: input.visibility, note: input.note ?? null })
+    .select('id')
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: data.id };
+}
+
+/** "Checking out" — there is nothing else about a check-in worth mutating, so
+ * changing your mind means removing it rather than editing it in place. */
+export async function checkOut(checkInId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to remove.' };
+  const { error } = await supabase.from('check_ins').delete().eq('id', checkInId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Everyone currently checked in at a venue that this account is actually
+ * allowed to see: itself, plus any 'friends'-visibility check-in from a
+ * mutual follow. RLS decides that, not the `.eq('venue_id', ...)` filter
+ * here — a stranger's 'private' or non-mutual 'friends' check-in never
+ * reaches this function's result set to begin with.
+ */
+export async function getVenueCheckIns(venueId: string): Promise<VenueCheckIn[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  const selfId = auth?.user?.id;
+  const since = new Date(Date.now() - CHECKIN_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('check_ins')
+    .select('id, user_id, note, created_at')
+    .eq('venue_id', venueId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false });
+  const rows = data ?? [];
+  if (!rows.length) return [];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+  const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', userIds);
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    userName: nameById[row.user_id] ?? 'Someone',
+    createdAt: row.created_at,
+    note: row.note ?? undefined,
+    isSelf: row.user_id === selfId,
+  }));
+}
+
+/* ---------------------------------------------------------------- follows */
+
+/**
+ * F-SOCIAL-02 (full): a real follow of a real account — distinct from
+ * `toggleFollowMember`'s seeded-community roster, which this does not
+ * replace. Following someone for real is what lets a mutual follow see a
+ * 'friends' check-in or start a DM thread with them (see
+ * `private.are_mutual_follows`).
+ */
+export async function followUser(userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to follow.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to follow someone.' };
+  const { error } = await supabase.from('follows').insert({ follower_id: user.id, followee_id: userId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function unfollowUser(userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to unfollow.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to unfollow someone.' };
+  const { error } = await supabase.from('follows').delete().eq('follower_id', user.id).eq('followee_id', userId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * This account's own follow edges — who it follows, and who follows it.
+ * `follows_read_own` only ever returns edges touching this account, which is
+ * exactly what computing mutuality client-side needs and no more; it cannot
+ * be used to browse anyone else's social graph.
+ */
+export async function getMyFollowGraph(): Promise<{ following: string[]; followedBy: string[] }> {
+  if (!hasBackend || !supabase) return { following: [], followedBy: [] };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { following: [], followedBy: [] };
+  const { data } = await supabase.from('follows').select('follower_id, followee_id');
+  const rows = data ?? [];
+  return {
+    following: rows.filter((r) => r.follower_id === user.id).map((r) => r.followee_id),
+    followedBy: rows.filter((r) => r.followee_id === user.id).map((r) => r.follower_id),
+  };
+}
+
+/* --------------------------------------------------------- direct messages */
+
+function mapDmThread(row: DmThreadRow, selfId: string, nameById: Record<string, string>): DmThread {
+  const otherUserId = row.user_a === selfId ? row.user_b : row.user_a;
+  return {
+    id: row.id,
+    otherUserId,
+    otherUserName: nameById[otherUserId] ?? 'Someone',
+    blocked: row.blocked,
+    createdAt: row.created_at,
+    lastMessageAt: row.last_message_at,
+    messages: [],
+  };
+}
+
+/**
+ * F-MSG-05, reversed at the product owner's explicit direction: real
+ * consumer-to-consumer messaging, gated to accounts that mutually follow
+ * each other. Every DM thread this account is in, newest first — creating a
+ * new one is `startDmThread` below, gated by `dm_threads_insert_mutual`, not
+ * by this function.
+ */
+export async function getDmThreads(): Promise<DmThread[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return [];
+  const { data } = await supabase.from('dm_threads').select('*').order('last_message_at', { ascending: false });
+  const rows = data ?? [];
+  if (!rows.length) return [];
+
+  const otherIds = rows.map((r) => (r.user_a === user.id ? r.user_b : r.user_a));
+  const { data: profileRows } = await supabase.from('profiles').select('id, display_name').in('id', otherIds);
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+
+  return rows.map((row) => mapDmThread(row, user.id, nameById));
+}
+
+/**
+ * Finds or creates the one thread between this account and `otherUserId`.
+ * `dm_threads_unique_pair` plus `dm_threads_normalize` (which reorders
+ * user_a/user_b so the same pair can never insert twice under swapped
+ * arguments) are what make "look for it, and create it if it's not there"
+ * safe to do without a client-side race actually creating two threads.
+ */
+export async function startDmThread(
+  otherUserId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is no one to message.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to message someone.' };
+
+  const { data: existing } = await supabase
+    .from('dm_threads')
+    .select('id')
+    .or(`and(user_a.eq.${user.id},user_b.eq.${otherUserId}),and(user_a.eq.${otherUserId},user_b.eq.${user.id})`)
+    .maybeSingle();
+  if (existing) return { ok: true, id: existing.id };
+
+  const { data, error } = await supabase
+    .from('dm_threads')
+    .insert({ user_a: user.id, user_b: otherUserId })
+    .select('id')
+    .single();
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.includes('row-level security')
+        ? 'You can only message someone who follows you back.'
+        : error.message,
+    };
+  }
+  return { ok: true, id: data.id };
+}
+
+export async function getDmMessages(threadId: string): Promise<DmMessage[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('dm_messages')
+    .select('id, sender_id, body, created_at')
+    .eq('thread_id', threadId)
+    .order('created_at', { ascending: true });
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    senderId: row.sender_id,
+    text: row.body,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function sendDmMessage(input: {
+  threadId: string;
+  text: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; kept on this device only.' };
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
+  if (!user) return { ok: false, error: 'Sign in to send a message.' };
+  const { error } = await supabase
+    .from('dm_messages')
+    .insert({ thread_id: input.threadId, sender_id: user.id, body: input.text });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function blockDmThread(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to block.' };
+  const { error } = await supabase.from('dm_threads').update({ blocked: true }).eq('id', threadId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * The venue-message equivalent of `blockDmThread`, and a real fix rather
+ * than a new feature: `message_threads_own`'s RLS is `for all`, so this
+ * update was always allowed — `blockThread` in AppProvider just never called
+ * it, only ever setting `blocked` in local state. A thread "blocked" that
+ * way stayed blocked only on the device that blocked it, and not at all
+ * past a reinstall or a second device, while the business side could still
+ * write into it the whole time.
+ */
+export async function blockMessageThread(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to block.' };
+  const { error } = await supabase.from('message_threads').update({ blocked: true }).eq('id', threadId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /** Persist a booking. Deposit terms acceptance is stored with the text shown. */
