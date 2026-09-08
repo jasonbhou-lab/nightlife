@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Pressable, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, Switch, Text, View } from 'react-native';
 
 import { BackendBanner } from '@/components/BackendBanner';
 import {
@@ -13,6 +13,7 @@ import { acceptInvite, deleteInvite, getMyPendingInvites } from '@/data/reposito
 import { alert } from '@/lib/alert';
 import { RATING_EXPLANATION } from '@/lib/ratings';
 import { formatTime } from '@/lib/hours';
+import { PRIVACY_POLICY_URL } from '@/lib/legal';
 import { useApp, useTheme, type ThemeSetting } from '@/state/AppProvider';
 import { font, space } from '@/theme';
 import type { BusinessInvite } from '@/types';
@@ -569,6 +570,18 @@ export default function ProfileScreen() {
       </View>
 
       <View style={gutter()}>
+        <SectionHeader title="Legal" />
+        <Card padded={false}>
+          <LinkRow
+            icon="shield-checkmark-outline"
+            label="Privacy Policy"
+            external
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => undefined)}
+          />
+        </Card>
+      </View>
+
+      <View style={gutter()}>
         <Text style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', lineHeight: 17 }]}>
           Nightlife · Houston launch metro{'\n'}
           Consumer scope only. No in-app payments, no live reservation inventory sync with venues.
@@ -616,6 +629,7 @@ function LinkRow({
   onPress,
   danger,
   disabled,
+  external,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -623,6 +637,8 @@ function LinkRow({
   onPress: () => void;
   danger?: boolean;
   disabled?: boolean;
+  /** Leaves the app (a browser tab) rather than pushing another screen, so the trailing icon says so instead of implying in-app navigation. */
+  external?: boolean;
 }) {
   const theme = useTheme();
   const color = danger ? theme.closed : theme.text;
@@ -648,7 +664,7 @@ function LinkRow({
         <Text style={[font.body, { color }]}>{label}</Text>
         {detail ? <Text style={[font.small, { color: theme.textFaint }]}>{detail}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.textFaint} />
+      <Ionicons name={external ? 'open-outline' : 'chevron-forward'} size={18} color={theme.textFaint} />
     </Pressable>
   );
 }

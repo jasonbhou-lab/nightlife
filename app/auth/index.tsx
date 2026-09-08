@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Linking, Text, TextInput, View } from 'react-native';
 
 import {
   Body, Button, Callout, Card, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
 } from '@/components/ui';
+import { PRIVACY_POLICY_URL } from '@/lib/legal';
 import { hasBackend } from '@/lib/supabase';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -284,6 +285,15 @@ export default function AuthScreen() {
               : 'No backend is configured, so this identity is local to this device only and ' +
                 'nothing is created anywhere else. Phone and age verification below remain ' +
                 'self-attested either way.'}
+            {' By continuing, you agree to our '}
+            <Text
+              style={{ color: theme.onGround, textDecorationLine: 'underline' }}
+              onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => undefined)}
+              accessibilityRole="link"
+            >
+              Privacy Policy
+            </Text>
+            {'.'}
           </Text>
         </View>
       ) : step === 'code' ? (
