@@ -475,6 +475,27 @@ development needs `expo start --web --https`; the redirect's crypto-state check 
 origin the flow started from, which plain `http://localhost` cannot satisfy — native and
 standalone/dev-client builds are unaffected.
 
+**Apple sign-in** (`app/auth.tsx`, `src/data/repository.ts`'s `signInWithApple`). A third real path onto
+the same account model, added specifically because of Apple's own App Store review requirement
+(guideline 4.8): an app offering a third-party sign-in on iOS must also offer Sign in with Apple.
+Everything about *how* it works is identical to Google sign-in above — same browser-based
+`signInWithOAuth` call, same platform split between a native system auth session and a full-tab
+redirect on web, same `'redirecting'` outcome — so both now share one `signInWithOAuthProvider(provider,
+label)` helper in `repository.ts` instead of duplicating that logic a second time. The only real
+difference is external configuration: an Apple Developer "Sign in with Apple" Services ID (used as the
+Client ID), a private key traded for the client secret Supabase's Apple provider setup walks through,
+and the same Supabase-callback and app-redirect URLs as Google's setup, entered under Authentication →
+Providers → Apple rather than → Google. Until that's done, the button fails the same honest, visible
+way as an unconfigured Google button does — Supabase's own "provider not enabled" error in the same
+callout, not a silent no-op.
+
+One asymmetry worth knowing, not a bug: Google sign-in gets a real display name on first sign-in (see
+above) because Google's ID token actually carries one. Apple's does not — its full name is only ever
+delivered through Sign in with Apple's *native* SDK on the very first authorization, never through the
+plain OAuth-redirect flow this app (and Supabase's `signInWithOAuth`) uses, so `handle_new_user()`'s
+existing `full_name`/`name` coalesce has nothing to read for an Apple account and correctly falls back
+to "Guest," same as the plain email-code path does before a name is ever set.
+
 **Review response composer** (`app/reviews/[id].tsx`, F-BIZ-07, scoped). The full requirement also
 asks for a sentiment summary, keyword themes, and alerting on new reviews below a threshold — those
 need real analytics or ML this build does not have, the same reason F-MEDIA-02/03's automated

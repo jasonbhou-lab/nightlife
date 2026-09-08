@@ -17,23 +17,26 @@ import { font, radius, space } from '@/theme';
  * attempt, never from a splash screen.
  *
  * With a backend configured, this is real Supabase Auth — a one-time code
- * emailed to you, no password field, ever, or Google sign-in as a second
- * real path onto the same account model. There is no separate sign-up
- * screen for either: the first successful code verification or Google
- * sign-in for a given identity *is* the account creation, same as it always
- * was for email. Without a backend, there is nowhere to send a code and no
- * OAuth provider to call, so sign-in falls back to a local,
+ * emailed to you, no password field, ever, or Google/Apple sign-in as two
+ * more real paths onto the same account model (see repository.ts's
+ * signInWithOAuthProvider — Apple exists here because Apple requires it
+ * wherever an app offers a third-party sign-in on iOS, not because it works
+ * any differently from Google). There is no separate sign-up screen for any
+ * of the three: the first successful code verification or OAuth sign-in for
+ * a given identity *is* the account creation, same as it always was for
+ * email. Without a backend, there is nowhere to send a code and no OAuth
+ * provider to call, so sign-in falls back to a local,
  * unpersisted-past-this-device identity, exactly as this screen always
- * worked before real auth existed — the Google button is hidden entirely
- * rather than shown broken. Either way, phone and age verification (the
- * second step) stays self-attested — there is no real SMS provider wired up
- * here.
+ * worked before real auth existed — the Google/Apple buttons are hidden
+ * entirely rather than shown broken. Either way, phone and age verification
+ * (the second step) stays self-attested — there is no real SMS provider
+ * wired up here.
  */
 export default function AuthScreen() {
   const theme = useTheme();
   const router = useRouter();
   const {
-    signIn, sendSignInCode, verifySignInCode, signInWithGoogle, verifyAge, session,
+    signIn, sendSignInCode, verifySignInCode, signInWithGoogle, signInWithApple, verifyAge, session,
   } = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -41,6 +44,7 @@ export default function AuthScreen() {
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [appleBusy, setAppleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'identify' | 'code' | 'verify'>('identify');
 
@@ -53,6 +57,20 @@ export default function AuthScreen() {
     // the session lands through app/auth/callback.tsx when Google comes back.
     if (result.ok === 'redirecting') return;
     setGoogleBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setStep('verify');
+  };
+
+  const continueWithApple = async () => {
+    setAppleBusy(true);
+    setError(null);
+    const result = await signInWithApple();
+    // Same "leave it loading" reasoning as continueWithGoogle above.
+    if (result.ok === 'redirecting') return;
+    setAppleBusy(false);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -213,6 +231,15 @@ export default function AuthScreen() {
                   loading={googleBusy}
                   style={{ marginTop: space.md }}
                   onPress={continueWithGoogle}
+                />
+                <Button
+                  label="Continue with Apple"
+                  variant="secondary"
+                  icon="logo-apple"
+                  full
+                  loading={appleBusy}
+                  style={{ marginTop: space.sm }}
+                  onPress={continueWithApple}
                 />
               </>
             ) : null}

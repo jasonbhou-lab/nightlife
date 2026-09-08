@@ -2015,14 +2015,15 @@ async function finishTokenSession(
 }
 
 /**
- * Google sign-in, for both new and returning accounts alike — there is no
- * separate "sign up" here, the same way the email code above never has one:
- * the first successful Google sign-in *is* the account creation, exactly
- * like the first-ever code verification for an email is.
+ * Google and Apple sign-in share this one flow — for both new and returning
+ * accounts alike, there is no separate "sign up" here, the same way the
+ * email code above never has one: the first successful OAuth sign-in *is*
+ * the account creation, exactly like the first-ever code verification for an
+ * email is.
  *
  * Supabase Auth's OAuth flow is browser-based either way: it hands back a URL
- * to `https://<project>.supabase.co/auth/v1/authorize`, and Google's own
- * consent screen and the OAuth client's secret never pass through this app at
+ * to `https://<project>.supabase.co/auth/v1/authorize`, and the provider's
+ * own consent screen and OAuth client secret never pass through this app at
  * all — both stay on Supabase's side. `redirectTo` is the same callback the
  * emailed magic link uses (see `completeAuthFromUrl` below); Supabase appends
  * the session as URL parameters when it sends the browser there.
@@ -2031,15 +2032,15 @@ async function finishTokenSession(
  *
  *  - **Native** opens the URL with `expo-web-browser`'s
  *    `openAuthSessionAsync`, a real system-managed auth session (not an
- *    in-app webview, which Google refuses outright). It resolves with the
- *    redirect URL itself, so the tokens are read straight off that return
- *    value and this path never touches the deep-link listener.
+ *    in-app webview, which both providers refuse outright). It resolves with
+ *    the redirect URL itself, so the tokens are read straight off that
+ *    return value and this path never touches the deep-link listener.
  *    `expo-auth-session`'s `QueryParams` helper does the parsing, since the
  *    tokens can land in the fragment rather than the query string and a plain
  *    `URL` parser would miss that half.
  *  - **Web** hands over the whole page instead. `openAuthSessionAsync` is
- *    implemented with `window.open` there, which meant Google sign-in popped
- *    a second window; leaving `skipBrowserRedirect` off lets supabase-js
+ *    implemented with `window.open` there, which meant sign-in popped a
+ *    second window; leaving `skipBrowserRedirect` off lets supabase-js
  *    `window.location.assign` the current tab, and the session comes back
  *    through the ordinary callback route on the next page load. Nothing after
  *    the call is guaranteed to run once navigation starts, which is what the
@@ -2055,10 +2056,18 @@ async function finishTokenSession(
  * --web --https`: the redirect's crypto-state check requires the same origin
  * the flow started from, which a plain `http://localhost` dev server cannot
  * satisfy. Native and standalone/dev-client builds are not affected.
+ *
+ * Apple's own App Store review requirements (guideline 4.8) are *why* this
+ * exists as a shared helper rather than a Google-only path: an app offering
+ * any third-party sign-in on iOS must also offer Sign in with Apple. Nothing
+ * about that requirement is Apple-native-SDK-specific — Supabase treats
+ * `provider: 'apple'` exactly like `'google'` here, so the same browser-based
+ * flow satisfies it on every platform this app ships to, not just iOS.
  */
-export async function signInWithGoogle(): Promise<
-  { ok: true; profile: AuthProfile } | { ok: false; error: string } | { ok: 'redirecting' }
-> {
+async function signInWithOAuthProvider(
+  provider: 'google' | 'apple',
+  label: string,
+): Promise<{ ok: true; profile: AuthProfile } | { ok: false; error: string } | { ok: 'redirecting' }> {
   if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; there is nowhere to sign in to.' };
 
   const redirectTo = authCallbackUrl();
@@ -2068,7 +2077,7 @@ export async function signInWithGoogle(): Promise<
     // part of it, and anything queued behind that may never run.
     await markAuthFlowStarted();
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo },
     });
     if (error) return { ok: false, error: error.message };
@@ -2076,25 +2085,33 @@ export async function signInWithGoogle(): Promise<
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
+    provider,
     options: { redirectTo, skipBrowserRedirect: true },
   });
   if (error) return { ok: false, error: error.message };
-  if (!data.url) return { ok: false, error: 'Could not start Google sign-in.' };
+  if (!data.url) return { ok: false, error: `Could not start ${label} sign-in.` };
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
   if (result.type !== 'success') {
     return {
       ok: false,
-      error: result.type === 'cancel' ? 'Google sign-in was cancelled.' : 'Could not complete Google sign-in.',
+      error: result.type === 'cancel' ? `${label} sign-in was cancelled.` : `Could not complete ${label} sign-in.`,
     };
   }
 
   const { params, errorCode } = QueryParams.getQueryParams(result.url);
   if (errorCode) return { ok: false, error: errorCode };
   const { access_token, refresh_token } = params;
-  if (!access_token || !refresh_token) return { ok: false, error: 'Google did not return a session.' };
+  if (!access_token || !refresh_token) return { ok: false, error: `${label} did not return a session.` };
   return finishTokenSession(access_token, refresh_token);
+}
+
+export function signInWithGoogle() {
+  return signInWithOAuthProvider('google', 'Google');
+}
+
+export function signInWithApple() {
+  return signInWithOAuthProvider('apple', 'Apple');
 }
 
 /**

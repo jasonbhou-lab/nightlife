@@ -11,7 +11,8 @@ import {
   completeAuthFromUrl, createMessageThread, deleteOwnAccount, followUser as followUserRemote,
   getAuthSnapshot, getDmMessages, getDmThreads, getManagedVenueIds, getMyFollowGraph,
   getPlatformRoles, getThreadMessages, onAuthSignedOut, sendDmMessage, sendMessage as sendMessageRemote,
-  sendSignInCode as sendSignInCodeRemote, signInWithGoogle as signInWithGoogleRemote, signOutRemote,
+  sendSignInCode as sendSignInCodeRemote, signInWithApple as signInWithAppleRemote,
+  signInWithGoogle as signInWithGoogleRemote, signOutRemote,
   startDmThread, unfollowUser as unfollowUserRemote, verifySignInCode as verifySignInCodeRemote,
   type AuthProfile,
 } from '@/data/repository';
@@ -115,6 +116,8 @@ type Ctx = {
    * keep showing progress rather than treating it as done or failed.
    */
   signInWithGoogle: () => Promise<{ ok: true } | { ok: false; error: string } | { ok: 'redirecting' }>;
+  /** Same shape and reasoning as signInWithGoogle above — see repository.ts's signInWithOAuthProvider. */
+  signInWithApple: () => Promise<{ ok: true } | { ok: false; error: string } | { ok: 'redirecting' }>;
   /**
    * Set when the user tapped the magic-link email and Supabase's redirect
    * carried an error (expired or already-used link) instead of a session —
@@ -521,6 +524,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   > => {
     const result = await signInWithGoogleRemote();
     // Web hands the tab to Google and finishes through the callback route
+    // instead of returning a profile here; there is nothing to apply yet.
+    if (result.ok === 'redirecting') return result;
+    if (!result.ok) return result;
+    applyAuthProfile(result.profile);
+    getManagedVenueIds().then(setManagedVenueIds).catch(() => {});
+    getPlatformRoles().then(setPlatformRoles).catch(() => {});
+    loadSocialGraph();
+    return { ok: true };
+  }, [applyAuthProfile]);
+
+  const signInWithApple = useCallback(async (): Promise<
+    { ok: true } | { ok: false; error: string } | { ok: 'redirecting' }
+  > => {
+    const result = await signInWithAppleRemote();
+    // Web hands the tab to Apple and finishes through the callback route
     // instead of returning a profile here; there is nothing to apply yet.
     if (result.ok === 'redirecting') return result;
     if (!result.ok) return result;
@@ -1041,6 +1059,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       sendSignInCode,
       verifySignInCode,
       signInWithGoogle,
+      signInWithApple,
       authCallbackError,
       verifyAge,
       attemptContribution,
@@ -1101,7 +1120,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, deleteAccount, sendSignInCode,
-      verifySignInCode, signInWithGoogle, authCallbackError, verifyAge, attemptContribution, requireAccount, managedVenueIds, isManagingVenue,
+      verifySignInCode, signInWithGoogle, signInWithApple, authCallbackError, verifyAge, attemptContribution, requireAccount, managedVenueIds, isManagingVenue,
       addManagedVenue, platformRoles, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,
