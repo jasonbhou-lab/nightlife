@@ -1874,14 +1874,19 @@ export async function setVenueReviewAlertThreshold(input: {
  * messaging still cannot succeed, since their RLS policies require
  * `private.is_verified()` and nothing can make that true here.
  */
-export type AuthProfile = { displayName: string; phoneVerified: boolean; ageVerified: boolean };
+export type AuthProfile = { displayName: string; phoneVerified: boolean; ageVerified: boolean; elite: boolean };
 
 function toAuthProfile(
-  row: { display_name: string; phone_verified: boolean; age_verified: boolean } | null,
+  row: { display_name: string; phone_verified: boolean; age_verified: boolean; elite: boolean } | null,
 ): AuthProfile {
   return row
-    ? { displayName: row.display_name, phoneVerified: row.phone_verified, ageVerified: row.age_verified }
-    : { displayName: 'You', phoneVerified: false, ageVerified: false };
+    ? {
+        displayName: row.display_name,
+        phoneVerified: row.phone_verified,
+        ageVerified: row.age_verified,
+        elite: row.elite,
+      }
+    : { displayName: 'You', phoneVerified: false, ageVerified: false, elite: false };
 }
 
 /**
@@ -1985,7 +1990,7 @@ export async function verifySignInCode(input: {
 
   const { data: row } = await supabase
     .from('profiles')
-    .select('display_name, phone_verified, age_verified')
+    .select('display_name, phone_verified, age_verified, elite')
     .eq('id', data.user.id)
     .maybeSingle();
   return { ok: true, profile: toAuthProfile(row) };
@@ -2003,7 +2008,7 @@ async function finishTokenSession(
 
   const { data: row } = await supabase
     .from('profiles')
-    .select('display_name, phone_verified, age_verified')
+    .select('display_name, phone_verified, age_verified, elite')
     .eq('id', data.user.id)
     .maybeSingle();
   return { ok: true, profile: toAuthProfile(row) };
@@ -2170,7 +2175,7 @@ export async function getAuthSnapshot(): Promise<AuthProfile | null> {
     if (!user) return null;
     const { data: row } = await supabase
       .from('profiles')
-      .select('display_name, phone_verified, age_verified')
+      .select('display_name, phone_verified, age_verified, elite')
       .eq('id', user.id)
       .maybeSingle();
     return toAuthProfile(row);

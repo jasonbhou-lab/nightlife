@@ -21,7 +21,7 @@ import { font, radius, space } from '@/theme';
 export default function SavedScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { collections, createCollection, deleteCollection, now, bookings } = useApp();
+  const { collections, createCollection, deleteCollection, now, bookings, requireAccount } = useApp();
   const { venueById } = useCatalogue();
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
@@ -90,7 +90,7 @@ export default function SavedScreen() {
           title="Collections"
           subtitle="Private by default, shareable by link"
           actionLabel={adding ? 'Cancel' : 'Create'}
-          onAction={() => setAdding((a) => !a)}
+          onAction={() => (adding ? setAdding(false) : requireAccount(() => setAdding(true), 'Creating a collection needs an account. Reading and browsing do not.'))}
         />
 
         {adding ? (
@@ -134,7 +134,7 @@ export default function SavedScreen() {
             title="No collections yet"
             body="Collections are how you shortlist. Make one for the anniversary dinner and one for the cigar list, then add venues from any profile."
             actionLabel="Create a collection"
-            onAction={() => setAdding(true)}
+            onAction={() => requireAccount(() => setAdding(true), 'Creating a collection needs an account. Reading and browsing do not.')}
           />
         ) : (
           collections.map((c) => {

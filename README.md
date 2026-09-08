@@ -257,6 +257,46 @@ on a DM thread mirror the existing venue-message thread's controls exactly (same
 trigger shape, same block-then-reject-further-writes behavior) — abuse controls a nightlife app's
 real-user chat needs just as much as its venue chat does, arguably more.
 
+**SessionRole gating audit** (guest/registered/verified/elite, PRD §2.1/2.4). Three real gaps
+surfaced by auditing every place `session.role` is checked against what each tier is actually
+supposed to be able to do. First: save/collections (`toggleSave`, `createCollection`,
+`inviteCollaborator`, etc., F-SOCIAL-03/04) had no gate anywhere — a guest could bookmark a venue
+or build out a shared collection despite the PRD naming "save" directly as something a guest
+"cannot" do, one of exactly five forbidden actions. Fixed with a single shared
+`AppProvider.requireAccount()` (the sign-in-prompt gate that follow/check-in already had, but had
+been hand-duplicated per screen rather than shared) now also wired into the bookmark button on
+`VenueCard` and the venue profile, and into creating a collection or inviting a collaborator.
+Second: the venue profile's own "Write a review" button (`app/venue/[id].tsx`) checked for
+`guest` but not `registered`, while the all-reviews screen's identical button correctly required
+`verified` — a signed-in-but-unverified account could fill out an entire review on one entry point
+and have it silently rejected by `reviews_insert_own`'s RLS only after tapping Publish, while the
+other entry point blocked it up front with an explanation. Now both check the same thing. Third,
+and the more structural one: `role: 'elite'` could never actually be reached by a real account.
+Elite is granted directly in the database, same as `trust` — no self-serve path, intentionally —
+but the query that turns a database profile into a client session
+(`getAuthSnapshot`/`AuthProfile` in `repository.ts`) never selected the `elite` column in the first
+place, so `applyAuthProfile` had no way to know. A real elite account still got its one
+server-enforced perk (the 40-vs-8 daily photo cap, since that trigger reads `profiles.elite`
+directly and never trusted the client), but the elite badge, "Elite contributor" profile line, and
+the review composer's reduced-latency notice were all unreachable dead code. Fixed by adding
+`elite` to that select and to `AuthProfile`, and computing `role: 'elite'` when the database says
+so and the account is also verified (elite sits above verified in the PRD's tier list, not beside
+it).
+
+Two things the same audit found and did *not* touch, because both are already-documented,
+deliberate scope decisions rather than oversights: R3 (verified) itself is client-side-only when a
+real backend is configured — `verifyAge()` flips local session state, but
+`profiles_guard_privileged_columns()` rejects any client write to `phone_verified`/`age_verified`,
+and nothing else writes them either, so a real signed-in account can tap "Verify" and see
+`role: 'verified'` locally while every real booking, review, or business-message attempt still
+gets rejected server-side by `is_verified()`. See "No real phone or age verification" below —
+this is that same gap, restated as a role-functionality question rather than a compliance one.
+And business roles (`owner`/`manager`/`staff`) are functionally identical everywhere except
+ownership-transfer invites: any role holder can invite a manager or another staff member, edit or
+delete another role holder's offers and reply templates, and edit or roll back the full attribute
+registry. `InvitableBusinessRole`'s own comment ("an existing role holder may invite...") confirms
+this is intentional, not accidental, so it was left as-is rather than treated as a bug.
+
 **Photo upload** (`app/photo/new.tsx`, `src/lib/media.ts`, F-MEDIA-01). A real upload path, not a
 count-only stepper: pick from the camera or the library, and the image is re-encoded through
 `expo-image-manipulator` before it ever reaches the network — producing a new JPEG drops embedded

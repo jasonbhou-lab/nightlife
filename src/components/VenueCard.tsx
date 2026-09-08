@@ -34,7 +34,7 @@ export function VenueCard({
 }) {
   const theme = useTheme();
   const router = useRouter();
-  const { now, isSaved, toggleSave } = useApp();
+  const { now, isSaved, toggleSave, requireAccount } = useApp();
 
   const state = venueState(venue, now);
   const chips = decisionChips(venue, now, compact ? 2 : 3);
@@ -157,7 +157,7 @@ export function VenueCard({
 
       {rightSlot ?? (
         <Pressable
-          onPress={() => toggleSave(venue.id)}
+          onPress={() => requireAccount(() => toggleSave(venue.id), 'Saving venues needs an account. Reading and browsing do not.')}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={saved ? `Remove ${venue.name} from saved` : `Save ${venue.name}`}

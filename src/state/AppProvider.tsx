@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
-import { useColorScheme } from 'react-native';
+import { Alert, useColorScheme } from 'react-native';
 
 import {
   blockDmThread, blockMessageThread, cancelBookingRemote, checkIn as checkInRemote,
@@ -123,6 +124,14 @@ type Ctx = {
   /** Returns 'ok' | 'soft_wall' | 'hard_wall'. */
   attemptContribution: () => 'ok' | 'soft_wall';
   canBook: boolean;
+  /**
+   * The shared R1→R2 gate: guest blocked with a sign-in prompt, anyone else
+   * runs `action`. Was duplicated ad hoc per screen (follow, check-in); now
+   * the one place save/collections, follow, and check-in all route through,
+   * so a guest can't reach any of them by way of a screen that forgot to
+   * ask.
+   */
+  requireAccount: (action: () => void, message?: string) => void;
 
   /** F-BIZ-01/07: venues this account holds a business role at. */
   managedVenueIds: string[];
@@ -300,8 +309,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /** Replaces the local mock session with a real account's, once signed in for real. */
   const applyAuthProfile = useCallback(
     (profile: AuthProfile) => {
+      const verified = profile.phoneVerified && profile.ageVerified;
       updateSession({
-        role: profile.phoneVerified && profile.ageVerified ? 'verified' : 'registered',
+        // Elite (src/types.ts SessionRole) sits above verified and, like
+        // trust, is granted directly in the database — see README's "the
+        // same honest gap as elite/trust on profiles having no client-side
+        // path to earn them." A profile can only be elite once verified,
+        // so this never promotes an unverified account.
+        role: profile.elite && verified ? 'elite' : verified ? 'verified' : 'registered',
         name: profile.displayName,
         phoneVerified: profile.phoneVerified,
         ageVerified: profile.ageVerified,
@@ -566,6 +581,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updateSession({ contributionAttempts: next });
     return next >= 3 ? 'soft_wall' : 'ok';
   }, [session.contributionAttempts, session.role, updateSession]);
+
+  const requireAccount = useCallback(
+    (action: () => void, message = 'This needs an account. Reading and browsing do not.') => {
+      const gate = attemptContribution();
+      if (session.role === 'guest') {
+        Alert.alert(gate === 'soft_wall' ? 'Sign in to keep going' : 'This needs an account', message, [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Sign in', onPress: () => router.push('/auth') },
+        ]);
+        return;
+      }
+      action();
+    },
+    [attemptContribution, session.role],
+  );
 
   /* ------------------------------------------------------------- filters */
   const setFilters = useCallback((f: FilterState) => setFiltersState(f), []);
@@ -1013,6 +1043,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       authCallbackError,
       verifyAge,
       attemptContribution,
+      requireAccount,
       canBook: session.role === 'verified' || session.role === 'elite',
       managedVenueIds,
       isManagingVenue,
@@ -1069,7 +1100,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       ready, theme, themeSetting, setThemeSetting, session, signIn, signOut, deleteAccount, sendSignInCode,
-      verifySignInCode, signInWithGoogle, authCallbackError, verifyAge, attemptContribution, managedVenueIds, isManagingVenue,
+      verifySignInCode, signInWithGoogle, authCallbackError, verifyAge, attemptContribution, requireAccount, managedVenueIds, isManagingVenue,
       addManagedVenue, platformRoles, filters, setFilters, resetFilters, recentSearches,
       pushRecentSearch, collections, isSaved, toggleSave, createCollection,
       removeFromCollection, deleteCollection, inviteCollaborator, removeCollaborator,

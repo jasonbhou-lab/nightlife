@@ -24,7 +24,7 @@ export default function CollectionScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { collections, removeFromCollection, inviteCollaborator, removeCollaborator, now } = useApp();
+  const { collections, removeFromCollection, inviteCollaborator, removeCollaborator, now, requireAccount } = useApp();
   const { venueById } = useCatalogue();
   const [inviting, setInviting] = useState(false);
 
@@ -84,7 +84,7 @@ export default function CollectionScreen() {
           title="Collaborators"
           subtitle="Invited contributors, credited for what they add"
           actionLabel={inviting ? 'Done' : 'Invite'}
-          onAction={() => setInviting((v) => !v)}
+          onAction={() => (inviting ? setInviting(false) : requireAccount(() => setInviting(true), 'Inviting a collaborator needs an account. Reading and browsing do not.'))}
         />
         <Card>
           {collaborators.length === 0 ? (

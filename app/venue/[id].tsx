@@ -37,7 +37,7 @@ export default function VenueProfile() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
-    now, isSaved, toggleSave, session, canBook, attemptContribution, startThread,
+    now, isSaved, toggleSave, session, canBook, attemptContribution, requireAccount, startThread,
     isFollowingVenue, toggleFollowVenue, addCheckIn, isManagingVenue, isTrustSafety, isMutualWith,
   } = useApp();
   const {
@@ -204,26 +204,16 @@ export default function VenueProfile() {
       );
       return;
     }
-    router.push({ pathname: '/review/new', params: { id: venue.id } });
-  };
-
-  // F-SOCIAL-02 / F-SOCIAL-05. Following and checking in are R2 capabilities
-  // per the PRD's role list (2.1) — lighter than the R3 gate on booking and
-  // messaging, so a registered-but-unverified account can do both.
-  const requireAccount = (action: () => void) => {
-    const gate = attemptContribution();
-    if (session.role === 'guest') {
-      Alert.alert(
-        gate === 'soft_wall' ? 'Sign in to keep going' : 'This needs an account',
-        'Following and checking in need an account. Reading and browsing do not.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Sign in', onPress: () => router.push('/auth') },
-        ],
-      );
+    // Same R3 gate as the all-reviews screen's own writeReview — a
+    // Registered (signed-in, not-yet-verified) account isn't done yet.
+    if (session.role === 'registered') {
+      Alert.alert('Verification required', 'Writing a review at a venue that serves alcohol requires a verified account.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Sign in', onPress: () => router.push('/auth') },
+      ]);
       return;
     }
-    action();
+    router.push({ pathname: '/review/new', params: { id: venue.id } });
   };
 
   const following = isFollowingVenue(venue.id);
@@ -329,7 +319,7 @@ export default function VenueProfile() {
         right={
           <View style={[ui.row, { gap: space.sm }]}>
             <Pressable
-              onPress={() => toggleSave(venue.id)}
+              onPress={() => requireAccount(() => toggleSave(venue.id), 'Saving venues needs an account. Reading and browsing do not.')}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityState={{ selected: saved }}
