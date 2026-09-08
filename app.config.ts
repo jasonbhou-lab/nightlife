@@ -78,6 +78,21 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
     'expo-router',
     'expo-web-browser',
     [
+      // splash-icon.png was already in assets/, left over from the Expo
+      // template, but nothing ever wired it up -- there was no
+      // expo-splash-screen dependency and no plugin entry, so app launch
+      // showed no branded splash at all. This is what actually connects
+      // the (now KULTURE-branded, transparent) image to a real launch
+      // screen: the plugin composites it over backgroundColor itself.
+      'expo-splash-screen',
+      {
+        backgroundColor: '#000000',
+        image: './assets/splash-icon.png',
+        imageWidth: 220,
+        resizeMode: 'contain',
+      },
+    ],
+    [
       'react-native-maps',
       {
         iosGoogleMapsApiKey: process.env.GOOGLE_MAPS_IOS_API_KEY,
