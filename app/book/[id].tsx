@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { TableMap } from '@/components/TableMap';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { getGuestListCount, saveBooking } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { bookingModeLabel, money } from '@/lib/format';
 import { formatTime, isOpenAt, toMinutes, venueState } from '@/lib/hours';
 import { hasBackend } from '@/lib/supabase';
@@ -329,7 +330,7 @@ async function persistBooking(input: Parameters<typeof saveBooking>[0]): Promise
   if (!hasBackend) return `b-${Date.now()}`;
   const result = await saveBooking(input);
   if (!result.ok) {
-    Alert.alert('Could not confirm', result.error);
+    alert('Could not confirm', result.error);
     return null;
   }
   return result.id;
@@ -674,7 +675,7 @@ function TableServiceForm({ venue }: { venue: Venue }) {
         onPress={() => {
           if (!table || !window) return;
           // U-03: a financial action confirms with the consequence stated.
-          Alert.alert(
+          alert(
             `Charge ${money(deposit)} now?`,
             `This deposit is applied to your ${money(table.minimumSpend)} minimum. ${
               venue.bookingTerms ?? ''

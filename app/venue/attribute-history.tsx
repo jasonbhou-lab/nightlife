@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 import { Body, Button, Callout, Card, Divider, gutter, IconBadge, Screen, ScreenHeader } from '@/components/ui';
 import { attributeByKey } from '@/data/attributes';
 import { useCatalogue } from '@/data/catalogue';
 import { getVenueAttributeHistory, updateVenueAttributes } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { formatAttribute, relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, space } from '@/theme';
@@ -78,7 +79,7 @@ export default function AttributeHistoryScreen() {
   }
 
   const restore = (targetEntry: VenueAttributeHistoryEntry) => {
-    Alert.alert(
+    alert(
       'Restore this version?',
       'Every attribute reverts to what it was at this point. This itself becomes a new change, so nothing already logged is lost.',
       [
@@ -90,7 +91,7 @@ export default function AttributeHistoryScreen() {
             const result = await updateVenueAttributes({ venueId: venue.id, attributes: targetEntry.attributes });
             setRestoringId(null);
             if (!result.ok) {
-              Alert.alert('Could not restore', result.error);
+              alert('Could not restore', result.error);
               return;
             }
             setVenueAttributes(venue.id, result.attributes, result.meta);

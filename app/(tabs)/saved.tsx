@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, Share, Text, TextInput, View } from 'react-native';
+import { Pressable, Share, Text, TextInput, View } from 'react-native';
 
 import {
   Body, Button, Card, Divider, EmptyState, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { alert } from '@/lib/alert';
 import { venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -181,7 +182,7 @@ export default function SavedScreen() {
                     danger
                     onPress={() =>
                       // U-03: destructive actions confirm with the consequence stated.
-                      Alert.alert(
+                      alert(
                         `Delete “${c.name}”?`,
                         `This removes the collection and its ${list.length} saved ${
                           list.length === 1 ? 'venue' : 'venues'

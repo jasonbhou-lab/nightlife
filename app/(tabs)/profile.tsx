@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, Switch, Text, View } from 'react-native';
+import { Pressable, Switch, Text, View } from 'react-native';
 
 import { BackendBanner } from '@/components/BackendBanner';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { acceptInvite, deleteInvite, getMyPendingInvites } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { RATING_EXPLANATION } from '@/lib/ratings';
 import { formatTime } from '@/lib/hours';
 import { useApp, useTheme, type ThemeSetting } from '@/state/AppProvider';
@@ -41,7 +42,7 @@ export default function ProfileScreen() {
     const result = await deleteAccount();
     setDeletingAccount(false);
     if (!result.ok) {
-      Alert.alert('Could not delete your account', result.error);
+      alert('Could not delete your account', result.error);
     }
   };
 
@@ -57,7 +58,7 @@ export default function ProfileScreen() {
       : await deleteInvite(invite.id);
     setInvitesBusy(null);
     if (!result.ok) {
-      Alert.alert(accept ? 'Could not accept' : 'Could not decline', result.error);
+      alert(accept ? 'Could not accept' : 'Could not decline', result.error);
       return;
     }
     if (accept) addManagedVenue(invite.venueId);
@@ -268,7 +269,7 @@ export default function ProfileScreen() {
                     label="Discard"
                     variant="ghost"
                     onPress={() =>
-                      Alert.alert(
+                      alert(
                         'Discard this draft?',
                         'The text and ratings you saved for this venue will be deleted. This cannot be undone.',
                         [
@@ -316,7 +317,7 @@ export default function ProfileScreen() {
                     label="Cancel"
                     variant="danger"
                     onPress={() =>
-                      Alert.alert(
+                      alert(
                         'Cancel this booking?',
                         b.deposit
                           ? `Your $${b.deposit} deposit is forfeited if you cancel inside the venue's cancellation window. ${v?.bookingTerms ?? ''}`
@@ -547,7 +548,7 @@ export default function ProfileScreen() {
             danger
             disabled={deletingAccount}
             onPress={() =>
-              Alert.alert(
+              alert(
                 'Delete your account?',
                 'This permanently removes your profile, reviews, bookings, collections, and message ' +
                   'threads, and signs you out everywhere. It cannot be undone.',

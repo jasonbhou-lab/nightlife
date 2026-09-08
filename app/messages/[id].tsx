@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import {
   Body, Button, Callout, Card, Chip, Divider, gutter, IconBadge, Label, Screen, ScreenHeader,
   styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { alert } from '@/lib/alert';
 import { relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -65,14 +66,14 @@ export default function ThreadScreen() {
   const send = () => {
     const result = sendThreadMessage(thread.id, text);
     if (!result.ok) {
-      Alert.alert('Could not send', result.error);
+      alert('Could not send', result.error);
       return;
     }
     setText('');
   };
 
   const reportOrBlock = () =>
-    Alert.alert('Report this conversation', 'Choose the reason that fits', [
+    alert('Report this conversation', 'Choose the reason that fits', [
       { text: 'Harassment or threats', onPress: () => blockThread(thread.id) },
       { text: 'Off-platform payment request', onPress: () => blockThread(thread.id) },
       { text: 'Spam or unrelated', onPress: () => blockThread(thread.id) },
@@ -127,7 +128,7 @@ export default function ThreadScreen() {
         <QuoteIntakeForm
           onSend={(intake, summary) => {
             const result = sendThreadMessage(thread.id, summary, intake);
-            if (!result.ok) Alert.alert('Could not send', result.error);
+            if (!result.ok) alert('Could not send', result.error);
           }}
         />
       ) : (

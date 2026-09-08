@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Text, TextInput, View } from 'react-native';
+import { Image, Text, TextInput, View } from 'react-native';
 
 import { albumLabel } from '@/components/PhotoTile';
 import {
@@ -8,6 +8,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { uploadPhoto } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { pickPhoto, type PickedPhoto } from '@/lib/media';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -94,7 +95,7 @@ export default function NewPhotoScreen() {
       const result = await pickPhoto(source);
       if (result) setPicked(result);
     } catch {
-      Alert.alert('Could not open the picker', 'Check that camera or photo permissions are allowed for this app.');
+      alert('Could not open the picker', 'Check that camera or photo permissions are allowed for this app.');
     }
   };
 
@@ -104,7 +105,7 @@ export default function NewPhotoScreen() {
     const result = await uploadPhoto({ venueId: venue.id, album, caption: caption.trim() || undefined, localUri: picked.uri });
     setUploading(false);
     if (!result.ok) {
-      Alert.alert('Could not upload', result.error);
+      alert('Could not upload', result.error);
       return;
     }
     addLocalPhoto(venue.id, result.photo);

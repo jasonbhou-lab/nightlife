@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
 
 import { AttributePanel } from '@/components/AttributePanel';
 import { Flames } from '@/components/Flames';
@@ -19,6 +19,7 @@ import {
 } from '@/data/repository';
 import { verticalMeta } from '@/data/taxonomy';
 import { isPromotedNow } from '@/lib/advertising';
+import { alert } from '@/lib/alert';
 import { decisionChips, headlineAnswer } from '@/lib/decide';
 import { exportVenueData } from '@/lib/export';
 import { actionsFor, categoryLine, freshness, metaFor, priceLabel, relativeDate } from '@/lib/format';
@@ -130,7 +131,7 @@ export default function VenueProfile() {
       case 'guestlist':
         if (!canBook) {
           // R1: hard wall on booking.
-          Alert.alert(
+          alert(
             'Verification required to book',
             'Booking at a venue that serves alcohol or permits tobacco requires a confirmed phone number and age verification. Browsing does not.',
             [
@@ -146,13 +147,13 @@ export default function VenueProfile() {
       case 'directions':
         logVenueEvent(venue.id, 'click_directions');
         Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(`${venue.name} ${venue.address}`)}`).catch(
-          () => Alert.alert('Could not open maps', 'No maps application is available on this device.'),
+          () => alert('Could not open maps', 'No maps application is available on this device.'),
         );
         return;
       case 'call':
         logVenueEvent(venue.id, 'click_call');
         Linking.openURL(`tel:${venue.phone.replace(/[^0-9]/g, '')}`).catch(() =>
-          Alert.alert('Could not place the call', `Dial ${venue.phone} manually.`),
+          alert('Could not place the call', `Dial ${venue.phone} manually.`),
         );
         return;
       case 'taplist':
@@ -177,7 +178,7 @@ export default function VenueProfile() {
     if (!canBook) {
       // Same gate as booking: PRD 2.4 requires a verified account (R3) to
       // message a business, not merely a registered one (R2).
-      Alert.alert(
+      alert(
         'Verification required to message a venue',
         'Messaging a venue requires a confirmed phone number and age verification. Browsing does not.',
         [
@@ -194,7 +195,7 @@ export default function VenueProfile() {
   const writeReview = () => {
     const gate = attemptContribution();
     if (session.role === 'guest') {
-      Alert.alert(
+      alert(
         gate === 'soft_wall' ? 'Sign in to keep going' : 'Reviewing needs an account',
         'Reviews at venues that serve alcohol require a verified account. Reading and browsing do not.',
         [
@@ -207,7 +208,7 @@ export default function VenueProfile() {
     // Same R3 gate as the all-reviews screen's own writeReview — a
     // Registered (signed-in, not-yet-verified) account isn't done yet.
     if (session.role === 'registered') {
-      Alert.alert('Verification required', 'Writing a review at a venue that serves alcohol requires a verified account.', [
+      alert('Verification required', 'Writing a review at a venue that serves alcohol requires a verified account.', [
         { text: 'Not now', style: 'cancel' },
         { text: 'Sign in', onPress: () => router.push('/auth') },
       ]);
@@ -220,7 +221,7 @@ export default function VenueProfile() {
 
   const checkIn = () =>
     requireAccount(() =>
-      Alert.alert(`Check in at ${venue.name}?`, 'Who can see this?', [
+      alert(`Check in at ${venue.name}?`, 'Who can see this?', [
         {
           text: 'Just me',
           onPress: () => {
@@ -246,7 +247,7 @@ export default function VenueProfile() {
 
   const exportData = () =>
     exportVenueData(venue, venueReviews(venue.id, true)).catch(() =>
-      Alert.alert('Could not export', 'Something went wrong preparing the file.'),
+      alert('Could not export', 'Something went wrong preparing the file.'),
     );
 
   /**
@@ -258,14 +259,14 @@ export default function VenueProfile() {
   const applyAlert = async () => {
     if (!venue) return;
     setTsBusy(true);
-    const alert = (alertDraft ?? venue.consumerAlert ?? '').trim();
-    const result = await setConsumerAlert({ venueId: venue.id, alert: alert || null });
+    const alertText = (alertDraft ?? venue.consumerAlert ?? '').trim();
+    const result = await setConsumerAlert({ venueId: venue.id, alert: alertText || null });
     setTsBusy(false);
     if (result.ok) {
-      setVenueConsumerAlert(venue.id, alert || undefined);
+      setVenueConsumerAlert(venue.id, alertText || undefined);
       setAlertDraft(null);
     } else {
-      Alert.alert('Could not update the alert', result.error);
+      alert('Could not update the alert', result.error);
     }
   };
 
@@ -278,7 +279,7 @@ export default function VenueProfile() {
       setVenueConsumerAlert(venue.id, undefined);
       setAlertDraft(null);
     } else {
-      Alert.alert('Could not clear the alert', result.error);
+      alert('Could not clear the alert', result.error);
     }
   };
 
@@ -289,12 +290,12 @@ export default function VenueProfile() {
     const result = await setContributionFrozen({ venueId: venue.id, frozen: next });
     setTsBusy(false);
     if (result.ok) setVenueContributionFrozen(venue.id, next);
-    else Alert.alert('Could not update contribution state', result.error);
+    else alert('Could not update contribution state', result.error);
   };
 
   const requestRemoval = (photo: Photo) =>
     requireAccount(() =>
-      Alert.alert('Report this photo', 'Choose the reason that fits', [
+      alert('Report this photo', 'Choose the reason that fits', [
         { text: "I'm in this photo and want it removed", onPress: () => fileRemoval(photo.id, 'subject_removal') },
         { text: 'Inappropriate content', onPress: () => fileRemoval(photo.id, 'inappropriate') },
         { text: 'Wrong venue or mislabeled', onPress: () => fileRemoval(photo.id, 'mislabeled') },
@@ -304,7 +305,7 @@ export default function VenueProfile() {
 
   const fileRemoval = async (photoId: string, reason: string) => {
     const result = await requestPhotoRemoval({ photoId, reason });
-    Alert.alert(
+    alert(
       result.ok ? 'Request sent' : 'Could not send the request',
       result.ok ? "We've recorded it." : result.error,
     );
@@ -352,7 +353,7 @@ export default function VenueProfile() {
             <Body style={{ color: theme.closed }}>{venue.consumerAlert}</Body>
             <Pressable
               onPress={() =>
-                Alert.alert(
+                alert(
                   'About Consumer Alerts',
                   'Trust & Safety applies an alert when there is evidence of review manipulation, undisclosed compensation, or threats against reviewers. Contribution on the listing can be frozen while it is investigated. Sales and account management have no ability to place, lift, or influence an alert.',
                 )
@@ -1192,7 +1193,7 @@ export default function VenueProfile() {
       <View style={gutter()}>
         <Pressable
           onPress={() =>
-            Alert.alert('Report this listing', 'Choose a reason', [
+            alert('Report this listing', 'Choose a reason', [
               { text: 'Closed or moved' },
               { text: 'Wrong category or attributes' },
               { text: 'Duplicate listing' },

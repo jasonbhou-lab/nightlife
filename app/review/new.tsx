@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { FlameInput } from '@/components/Flames';
 import { PhotoTile } from '@/components/PhotoTile';
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { publishReview, uploadPhoto } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { pickPhoto } from '@/lib/media';
 import { subRatingDimensions, tagVocabulary } from '@/lib/ratings';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -93,13 +94,13 @@ export default function NewReviewScreen() {
         localUri: picked.uri,
       });
       if (!result.ok) {
-        Alert.alert('Could not upload', result.error);
+        alert('Could not upload', result.error);
         return;
       }
       addLocalPhoto(venue.id, result.photo);
       setAttachedPhotos((prev) => [...prev, result.photo]);
     } catch {
-      Alert.alert('Could not open the picker', 'Check that camera or photo permissions are allowed for this app.');
+      alert('Could not open the picker', 'Check that camera or photo permissions are allowed for this app.');
     } finally {
       setAddingPhoto(false);
     }
@@ -495,7 +496,7 @@ export default function NewReviewScreen() {
           full
           disabled={submitting}
           onPress={() =>
-            Alert.alert(
+            alert(
               'Discard this review?',
               'Your rating, text, and tags for this venue will be deleted. This cannot be undone.',
               [

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, Share, Text, View } from 'react-native';
+import { Pressable, Share, Text, View } from 'react-native';
 
 import { VenueCard } from '@/components/VenueCard';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { communityById, communityMembers } from '@/data/community';
 import { useCatalogue } from '@/data/catalogue';
+import { alert } from '@/lib/alert';
 import { relativeDate } from '@/lib/format';
 import { venueState } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -101,7 +102,7 @@ export default function CollectionScreen() {
                   </View>
                   <Pressable
                     onPress={() =>
-                      Alert.alert(`Remove ${m.name}?`, 'They can no longer add or remove venues here. Anything they already added stays, credited to them.', [
+                      alert(`Remove ${m.name}?`, 'They can no longer add or remove venues here. Anything they already added stays, credited to them.', [
                         { text: 'Keep them', style: 'cancel' },
                         { text: 'Remove', style: 'destructive', onPress: () => removeCollaborator(collection.id, m.id) },
                       ])
@@ -158,7 +159,7 @@ export default function CollectionScreen() {
                 rightSlot={
                   <Pressable
                     onPress={() =>
-                      Alert.alert(
+                      alert(
                         `Remove ${v.name}?`,
                         `It comes out of “${collection.name}”. The venue itself and its reviews are unaffected.`,
                         [

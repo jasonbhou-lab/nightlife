@@ -189,6 +189,21 @@ profile screen itself are all real Google Maps features this build doesn't turn 
 parity with the schematic map's own feature set (pins, pan/zoom, bounded re-search), now on real
 tiles, not a superset of it.
 
+**Alert.alert did nothing on web** (`src/lib/alert.ts`, `src/components/AlertHost.tsx`). Reported as
+"Check-in and Follow don't respond after signing in" — Follow worked; Check-in didn't, and the
+reason applied to every confirmation, destructive-action prompt, and reason-picker in the app, not
+just that one button. `react-native-web`'s `Alert` export is `class Alert { static alert() {} }` —
+a complete no-op, not a degraded fallback — so all 50 `Alert.alert(...)` call sites across 16 files
+(sign-in gates, delete/report/block confirmations, the check-in visibility picker) silently did
+nothing on web while working normally on iOS/Android, where the real native Alert has no such gap.
+Fixed with a drop-in `alert(title, message, buttons)` matching `Alert.alert`'s own shape: off web it
+delegates straight to the real `Alert.alert`; on web it renders through `AlertHost`, one `Modal`
+mounted once in `app/_layout.tsx`, styled with the same `Card`/`theme` tokens as everything else
+rather than a native-looking imitation. Every call site was mechanical — swap the import, drop the
+`Alert.` prefix — except `app/venue/[id].tsx`'s `applyAlert`, which had a local `const alert = ...`
+(the venue's Consumer Alert text) shadowing the new import; renamed to `alertText` there, the only
+call site that needed an actual code change rather than a search-and-replace.
+
 **Bar/Lounge tiebreak** (PRD Open Question 8). Dual-assigned venues filter on their primary
 category, and in Tonight they surface as a Bar before 11 PM and as a Lounge after, since dwell
 rises later. The rule is stated in the UI rather than left implicit.

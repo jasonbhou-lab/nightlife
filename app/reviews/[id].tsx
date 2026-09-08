@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Flames } from '@/components/Flames';
 import { Meter, Stars } from '@/components/Stars';
@@ -12,6 +12,7 @@ import {
 import { useCatalogue } from '@/data/catalogue';
 import { communityByName } from '@/data/community';
 import { reportReview, respondToReview } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { relativeDate, REPORT_REASON_LABELS } from '@/lib/format';
 import {
   aggregateFor, FILTERED_EXPLANATION, RATING_EXPLANATION, subRatingDimensions,
@@ -85,7 +86,7 @@ export default function ReviewsScreen() {
   const write = () => {
     attemptContribution();
     if (session.role === 'guest' || session.role === 'registered') {
-      Alert.alert('Verification required', 'Writing a review at a venue that serves alcohol requires a verified account.', [
+      alert('Verification required', 'Writing a review at a venue that serves alcohol requires a verified account.', [
         { text: 'Not now', style: 'cancel' },
         { text: 'Sign in', onPress: () => router.push('/auth') },
       ]);
@@ -138,7 +139,7 @@ export default function ReviewsScreen() {
 
           <Divider style={{ marginVertical: space.md }} />
           <Pressable
-            onPress={() => Alert.alert('How this number is calculated', RATING_EXPLANATION)}
+            onPress={() => alert('How this number is calculated', RATING_EXPLANATION)}
             accessibilityRole="button"
             accessibilityLabel="How this rating is calculated"
             style={[ui.row, { gap: 6, minHeight: 40 }]}
@@ -289,7 +290,7 @@ function ReviewCard({
     setFollowBusy(true);
     const result = await toggleFollowUser(r.authorId);
     setFollowBusy(false);
-    if (!result.ok) Alert.alert('Could not update follow', result.error);
+    if (!result.ok) alert('Could not update follow', result.error);
   };
   const [respondError, setRespondError] = useState<string | null>(null);
   const [reported, setReported] = useState(false);
@@ -318,17 +319,17 @@ function ReviewCard({
   const openReport = () => {
     if (session.role === 'guest') {
       attemptContribution();
-      Alert.alert('Sign in required', 'Reporting a review needs an account.', [
+      alert('Sign in required', 'Reporting a review needs an account.', [
         { text: 'Not now', style: 'cancel' },
         { text: 'Sign in', onPress: () => router.push('/auth') },
       ]);
       return;
     }
     if (reported) {
-      Alert.alert('Already reported', 'You already reported this review — it is in the moderation queue.');
+      alert('Already reported', 'You already reported this review — it is in the moderation queue.');
       return;
     }
-    Alert.alert(
+    alert(
       'Report this review',
       'Pick the reason that fits',
       [
@@ -338,9 +339,9 @@ function ReviewCard({
             const result = await reportReview({ reviewId: r.id, reason });
             if (result.ok) {
               setReported(true);
-              Alert.alert('Reported', 'Thanks — this has been sent to the moderation queue.');
+              alert('Reported', 'Thanks — this has been sent to the moderation queue.');
             } else {
-              Alert.alert('Could not report this', result.error);
+              alert('Could not report this', result.error);
             }
           },
         })),

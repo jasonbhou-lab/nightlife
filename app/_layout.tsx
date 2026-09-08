@@ -4,6 +4,7 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AlertHost } from '@/components/AlertHost';
 import { CatalogueProvider } from '@/data/catalogue';
 import { AppProvider, useApp } from '@/state/AppProvider';
 
@@ -61,6 +62,7 @@ function Shell() {
         <Stack.Screen name="auth/callback" options={{ animation: 'fade_from_bottom', presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
       </Stack>
+      <AlertHost />
     </>
   );
 }

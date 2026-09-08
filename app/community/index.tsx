@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import {
   Body, Button, Card, Chip, EmptyState, gutter, IconBadge, Screen, ScreenHeader, SectionHeader,
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui';
 import { communityMembers } from '@/data/community';
 import { useCatalogue } from '@/data/catalogue';
+import { alert } from '@/lib/alert';
 import { relativeDate } from '@/lib/format';
 import { buildActivityFeed } from '@/lib/social';
 import { useApp, useTheme } from '@/state/AppProvider';
@@ -46,7 +47,7 @@ export default function CommunityScreen() {
   const requireAccount = (action: () => void) => {
     if (session.role === 'guest') {
       attemptContribution();
-      Alert.alert('Sign in to follow', 'Following people and venues needs an account, the same as writing a review.', [
+      alert('Sign in to follow', 'Following people and venues needs an account, the same as writing a review.', [
         { text: 'Not now', style: 'cancel' },
         { text: 'Sign in', onPress: () => router.push('/auth') },
       ]);

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { BackendBanner } from '@/components/BackendBanner';
 import { FilterSheet } from '@/components/FilterSheet';
@@ -14,6 +14,7 @@ import { attributeByKey } from '@/data/attributes';
 import { useCatalogue } from '@/data/catalogue';
 import { verticalMeta } from '@/data/taxonomy';
 import { isPromotedNow } from '@/lib/advertising';
+import { alert } from '@/lib/alert';
 import { formatAttribute } from '@/lib/format';
 import { activeFilterCount, parseNaturalQuery, searchVenues, suggest, type Suggestion } from '@/lib/search';
 import { detectVibe, rankByVibe, vibeDefs, type VibeDef } from '@/lib/vibes';
@@ -224,7 +225,7 @@ export default function SearchScreen() {
             </Text>
             <Pressable
               onPress={() =>
-                Alert.alert(
+                alert(
                   'Location is fixed for now',
                   'There is no real device location or manual location search wired up — every distance and ' +
                     '"open now" result here is computed against Downtown Houston.',

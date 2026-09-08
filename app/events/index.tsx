@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 
 import {
   Body, Button, Card, Chip, EmptyState, gutter, IconBadge, Label, Screen, ScreenHeader,
   SectionHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
+import { alert } from '@/lib/alert';
 import { DAY_LABELS, DAY_LABELS_LONG, formatTime } from '@/lib/hours';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
@@ -237,7 +238,7 @@ export default function EventsScreen() {
                       variant="ghost"
                       onPress={() =>
                         Linking.openURL(e.ticketUrl!).catch(() =>
-                          Alert.alert('Could not open that link', 'No browser is available on this device.'),
+                          alert('Could not open that link', 'No browser is available on this device.'),
                         )
                       }
                     />

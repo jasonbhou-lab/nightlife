@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Stars } from '@/components/Stars';
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui';
 import { communityById, communityCheckIns } from '@/data/community';
 import { useCatalogue } from '@/data/catalogue';
+import { alert } from '@/lib/alert';
 import { relativeDate } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, space } from '@/theme';
@@ -40,7 +41,7 @@ export default function CommunityMemberScreen() {
   const follow = () => {
     if (session.role === 'guest') {
       attemptContribution();
-      Alert.alert('Sign in to follow', 'Following people needs an account, the same as writing a review.', [
+      alert('Sign in to follow', 'Following people needs an account, the same as writing a review.', [
         { text: 'Not now', style: 'cancel' },
         { text: 'Sign in', onPress: () => router.push('/auth') },
       ]);

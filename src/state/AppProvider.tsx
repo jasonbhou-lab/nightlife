@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
 } from 'react';
-import { Alert, useColorScheme } from 'react-native';
+import { useColorScheme } from 'react-native';
 
 import {
   blockDmThread, blockMessageThread, cancelBookingRemote, checkIn as checkInRemote,
@@ -15,6 +15,7 @@ import {
   startDmThread, unfollowUser as unfollowUserRemote, verifySignInCode as verifySignInCodeRemote,
   type AuthProfile,
 } from '@/data/repository';
+import { alert } from '@/lib/alert';
 import { emptyFilters } from '@/lib/search';
 import { hasBackend } from '@/lib/supabase';
 import { darkTheme, lightTheme, type Theme, type ThemeMode } from '@/theme';
@@ -586,7 +587,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (action: () => void, message = 'This needs an account. Reading and browsing do not.') => {
       const gate = attemptContribution();
       if (session.role === 'guest') {
-        Alert.alert(gate === 'soft_wall' ? 'Sign in to keep going' : 'This needs an account', message, [
+        alert(gate === 'soft_wall' ? 'Sign in to keep going' : 'This needs an account', message, [
           { text: 'Not now', style: 'cancel' },
           { text: 'Sign in', onPress: () => router.push('/auth') },
         ]);
