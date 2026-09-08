@@ -96,7 +96,11 @@ export function VenueCard({
           </View>
         </View>
 
-        <View style={{ alignItems: 'flex-end', marginLeft: space.sm }}>
+        {/* marginTop clears the bookmark button below — it's absolutely
+            positioned over the card's top-right corner (outside this
+            Pressable's own padding), which is exactly where this column
+            would otherwise start too. */}
+        <View style={{ alignItems: 'flex-end', marginLeft: space.sm, marginTop: space.lg + space.sm }}>
           <Text style={[font.cardTitle, { color: theme.text }]}>{venue.rating.toFixed(1)}</Text>
           <Stars value={venue.rating} size={10} />
           <Text style={[font.small, { color: theme.textFaint, marginTop: 1 }]}>
