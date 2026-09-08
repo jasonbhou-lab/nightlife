@@ -63,7 +63,7 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
   android: {
     package: 'io.linqx.nightout',
     adaptiveIcon: {
-      backgroundColor: '#1B3FBF',
+      backgroundColor: '#000000',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
