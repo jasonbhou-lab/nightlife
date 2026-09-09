@@ -36,7 +36,7 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'io.linqx.nightout',
+    bundleIdentifier: 'io.kulture.kulture',
     infoPlist: {
       // US export-compliance declaration. Without this key, App Store Connect
       // stops every build and asks the question by hand before it can even go
@@ -61,7 +61,7 @@ const config: ExpoConfig & { newArchEnabled?: boolean } = {
     },
   },
   android: {
-    package: 'io.linqx.nightout',
+    package: 'io.kulture.kulture',
     adaptiveIcon: {
       backgroundColor: '#000000',
       foregroundImage: './assets/android-icon-foreground.png',
