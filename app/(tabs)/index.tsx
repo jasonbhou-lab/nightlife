@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, Linking, Text, View } from 'react-native';
 
 import { VenueCard } from '@/components/VenueCard';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
 import { activeHappyHour, formatDuration, formatTime, venueState } from '@/lib/hours';
+import { PRIVACY_POLICY_URL } from '@/lib/legal';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, radius, space } from '@/theme';
 import type { Venue } from '@/types';
@@ -342,6 +343,19 @@ export default function HomeScreen() {
           </Card>
         </View>
       ) : null}
+
+      {/* Footer: the app's landing screen, reachable with or without an
+          account, so the privacy link belongs here rather than only on
+          Profile (which already carries it in its own Legal section). */}
+      <View style={gutter()}>
+        <Text
+          style={[font.small, { color: theme.onGroundFaint, textAlign: 'center', textDecorationLine: 'underline' }]}
+          onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => undefined)}
+          accessibilityRole="link"
+        >
+          Privacy Policy
+        </Text>
+      </View>
     </Screen>
   );
 }
