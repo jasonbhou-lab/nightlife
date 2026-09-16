@@ -2,15 +2,18 @@
  * Single source for the privacy policy link, so the auth screen and Profile
  * don't each hardcode their own copy of a URL that's going to change.
  *
- * This currently points at the published draft (see PRIVACY_POLICY.md at
- * the repo root for the source of truth, and its own banner for what still
- * needs legal review before this is a real policy). Two things to fix
- * before this ships to anyone outside the team:
- *  1. A claude.ai/code/artifact link is private by default — it has to be
- *     shared from its own page before a tester's tap on this link resolves
- *     to anything.
- *  2. App Store Connect and Play Console both also want this URL entered
- *     directly in their own listing metadata, separate from this in-app
- *     link, and a claude.ai URL is not where this should permanently live.
+ * Points at PRIVACY_POLICY.md rendered on GitHub — the repo is public, so
+ * this needs no separate hosting or sharing step, unlike a claude.ai
+ * artifact link (the previous version of this file pointed at one; it was
+ * deleted out from under the app without warning, which is exactly the
+ * failure mode of depending on that kind of link for anything permanent).
+ *
+ * Still not the final home for this. App Store Connect and Play Console
+ * both also want this URL entered directly in their own listing metadata,
+ * separate from this in-app link, and a source-control blob view is a
+ * developer-facing page, not a branded one — worth moving to real hosting
+ * (even a bare static page under the app's own domain) before this ships
+ * to anyone outside the team. See PRIVACY_POLICY.md's own banner for what
+ * else — namely legal review — has to happen first regardless.
  */
-export const PRIVACY_POLICY_URL = 'https://claude.ai/code/artifact/07815a00-82a0-4f9f-8ee3-a682a8ebb579';
+export const PRIVACY_POLICY_URL = 'https://github.com/jasonbhou-lab/nightlife/blob/main/PRIVACY_POLICY.md';

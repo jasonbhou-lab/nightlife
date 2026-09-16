@@ -8,8 +8,7 @@
 > treat this as a live, binding policy until counsel has reviewed it. Every `[bracketed]` field needs a
 > real value before publication.
 >
-> A styled, published version of this same content lives at:
-> https://claude.ai/code/artifact/07815a00-82a0-4f9f-8ee3-a682a8ebb579
+> This file is the published copy the app links to — see `PRIVACY_POLICY_URL` in `src/lib/legal.ts`.
 
 Effective date: `[insert date]` · Last updated: `[insert date]` · Entity: `[Legal entity name]`
 
