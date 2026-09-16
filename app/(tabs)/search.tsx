@@ -24,6 +24,7 @@ import type { Review, SortKey, Venue, Vertical } from '@/types';
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'relevance', label: 'Relevance' },
+  { key: 'balanced', label: 'Balanced' },
   { key: 'rating', label: 'Rating' },
   { key: 'vibeRating', label: 'Vibe' },
   { key: 'distance', label: 'Distance' },

@@ -720,6 +720,7 @@ export type ReviewDraft = {
 
 export type SortKey =
   | 'relevance'
+  | 'balanced'
   | 'rating'
   | 'vibeRating'
   | 'distance'

@@ -198,6 +198,11 @@ function comparator(sort: SortKey, f: FilterState, now: Date) {
         return b.rating - a.rating || b.reviewCount - a.reviewCount;
       case 'vibeRating':
         return b.vibeRating - a.vibeRating || b.reviewCount - a.reviewCount;
+      // Star rating and Vibe (flames) are distinct axes (ratings.ts) — this
+      // averages them rather than picking a winner, same as the "Balanced"
+      // feed-sort preference on the Home tab.
+      case 'balanced':
+        return (b.rating + b.vibeRating) / 2 - (a.rating + a.vibeRating) / 2 || b.reviewCount - a.reviewCount;
       case 'distance':
         return a.distanceMi - b.distanceMi;
       case 'reviewCount':
