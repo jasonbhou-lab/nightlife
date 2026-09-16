@@ -16,15 +16,16 @@ import { hasBackend, supabase } from '@/lib/supabase';
 WebBrowser.maybeCompleteAuthSession();
 import type {
   AdCampaignRow, BookingRow, BusinessInviteRow, BusinessReplyTemplateRow, ContentReportRow,
-  DmThreadRow, EventRow, MessageRow, MessageThreadRow, ModerationActionRow, PhotoRow, ReviewRow,
-  TableTierRow, VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
+  DmThreadRow, EventRow, MessageAbuseFlagRow, MessageRow, MessageThreadRow, ModerationActionRow,
+  PhotoRow, ReviewRow, TableTierRow, VenueClaimRow, VenueEventRow, VenueOfferRow, VenueRow,
 } from '@/lib/database.types';
 import type {
   AdCampaign, AttributeMeta, AttributeValue, Booking, BusinessInvite, BusinessReplyTemplate,
   CheckInVisibility, ClaimableBusinessRole, ContentReport, DmMessage, DmThread, HappyHourWindow,
-  InvitableBusinessRole, MenuSection, Message, MessageThread, ModerationAction, Photo, PlatformRole,
-  ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent, VenueAttributeHistoryEntry,
-  VenueCheckIn, VenueClaim, VenueClaimStatus, VenueEvent, VenueEventKind, VenueOffer,
+  InvitableBusinessRole, MenuSection, Message, MessageAbuseFlag, MessageThread, ModerationAction,
+  Photo, PlatformRole, ReportReason, Review, Schedule, Venue, VenueAnalyticsEvent,
+  VenueAttributeHistoryEntry, VenueCheckIn, VenueClaim, VenueClaimStatus, VenueEvent,
+  VenueEventKind, VenueOffer,
 } from '@/types';
 
 /**
@@ -1597,6 +1598,60 @@ export async function moderateReport(input: {
 /** Restoring a removed review reuses the same transition machinery (removed -> dismissed). */
 export async function restoreReview(reportId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   return moderateReport({ reportId, status: 'dismissed' });
+}
+
+function mapMessageAbuseFlag(row: MessageAbuseFlagRow, nameById: Record<string, string>): MessageAbuseFlag {
+  return {
+    id: row.id,
+    dmMessageId: row.dm_message_id ?? undefined,
+    businessMessageId: row.business_message_id ?? undefined,
+    threadId: row.thread_id,
+    senderId: row.sender_id,
+    senderName: nameById[row.sender_id] ?? 'Unknown',
+    reason: row.reason,
+    flaggedText: row.flagged_text,
+    status: row.status,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at ?? undefined,
+  };
+}
+
+/**
+ * F-MSG-04. Every row here was written by detect_message_abuse(), never by
+ * this client — see that trigger's own comment on why it only ever stores
+ * the flagged message's own text, not the rest of either thread.
+ */
+export async function getMessageAbuseFlags(): Promise<MessageAbuseFlag[]> {
+  if (!hasBackend || !supabase) return [];
+  const { data } = await supabase
+    .from('message_abuse_flags')
+    .select('*')
+    .order('created_at', { ascending: false });
+  const rows = data ?? [];
+  const userIds = Array.from(new Set(rows.map((r) => r.sender_id)));
+  const { data: profileRows } = userIds.length
+    ? await supabase.from('profiles').select('id, display_name').in('id', userIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const nameById = Object.fromEntries((profileRows ?? []).map((p) => [p.id, p.display_name]));
+  return rows.map((row) => mapMessageAbuseFlag(row, nameById));
+}
+
+/**
+ * message_abuse_flags_guard_resolve() is what actually restricts this to
+ * exactly status/resolved_at/resolved_by and blocks resolving a flag
+ * twice — this just sends the new status.
+ */
+export async function resolveMessageAbuseFlag(input: {
+  flagId: string;
+  status: 'dismissed' | 'reviewed';
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!hasBackend || !supabase) return { ok: false, error: 'No backend configured; nothing to update.' };
+  const { error } = await supabase
+    .from('message_abuse_flags')
+    .update({ status: input.status })
+    .eq('id', input.flagId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /**

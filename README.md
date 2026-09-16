@@ -272,6 +272,40 @@ on a DM thread mirror the existing venue-message thread's controls exactly (same
 trigger shape, same block-then-reject-further-writes behavior) — abuse controls a nightlife app's
 real-user chat needs just as much as its venue chat does, arguably more.
 
+**Automated message abuse detection** (F-MSG-04, `detect_message_abuse()` trigger,
+`20260916100000_add_message_abuse_detection.sql`). Rate limiting and manual block/report already
+existed for both `dm_messages` and `messages`, but nothing automatically detected the two things
+F-MSG-04 actually names: harassment and off-platform-payment solicitation. This is a heuristic
+detector, not real ML/NLP — the same honest scope F-TRUST-02's own migration comment already states
+a reason for. Deliberately narrow on the harassment axis too: explicit threat/self-harm phrasing
+only (`"i will hurt you"`, `"kys"`), not a hate-speech or slur classifier, which needs real NLP to
+avoid a flood of false positives — and hardcoding slur strings into a migration file that lives in
+git history forever is its own bad idea regardless. The payment axis catches named services (Venmo,
+Cash App, Zelle, PayPal, wire transfer, Western Union) rather than bare phone/email patterns, since
+venues legitimately share contact info in messages constantly and that would be almost pure noise.
+
+Detection is silent by design, the same reasoning F-REVIEW-07 already uses for never exposing its
+own filtering rationale: the flagged message still sends normally, and only a moderator or
+trust_safety account ever sees that a flag exists. What they see is deliberately narrow too — the
+flagged message's own text, copied into `message_abuse_flags` at flag time, not the rest of either
+thread and not the other party's messages. Granting moderators broad read access to DMs, which are
+otherwise mutual-follow-private, is a materially bigger step than this and wasn't the ask.
+
+One real limitation, not a bug: `messages` (venue threads) only records `sender` as the literal
+string `'user'` or `'business'` — there's no per-staff-account column, so a `'business'`-sent
+message can't be attributed to a specific person the way every other `sender_id` in this schema
+means "this exact account." Detection is scoped to `sender = 'user'` for that table; teaching it to
+also watch the business side needs a real schema change (a `sender_user_id` column) first, not a
+fake attribution bolted on here.
+
+Building this also surfaced a real, previously-unexercised bug: `messages_touch_thread()` was never
+`SECURITY DEFINER`, unlike its sibling `dm_messages_touch_thread()`. `message_threads_own`'s policy
+is `for all using (user_id = auth.uid())` — true for the consumer who owns the thread, but a
+`business`-sender message is written by a business account, not the consumer, so this trigger's own
+`update message_threads set last_message_at = ...` failed RLS for every business reply. `messages`
+had zero rows in production, so no business had ever actually completed sending one. Fixed the same
+way `dm_messages_touch_thread()` already does it.
+
 **SessionRole gating audit** (guest/registered/verified/elite, PRD §2.1/2.4). Three real gaps
 surfaced by auditing every place `session.role` is checked against what each tier is actually
 supposed to be able to do. First: save/collections (`toggleSave`, `createCollection`,

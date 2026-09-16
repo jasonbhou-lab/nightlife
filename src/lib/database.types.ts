@@ -43,6 +43,8 @@ export type ModerationActionKindEnum =
   | 'consumer_alert_applied' | 'consumer_alert_cleared'
   | 'contribution_frozen' | 'contribution_unfrozen';
 export type VenueEventKindEnum = 'view' | 'click_call' | 'click_directions' | 'click_book';
+export type MessageFlagReasonEnum = 'off_platform_payment' | 'threat_or_self_harm';
+export type MessageFlagStatusEnum = 'pending' | 'dismissed' | 'reviewed';
 export type AdDaypartEnum = 'morning' | 'afternoon' | 'evening' | 'late_night';
 export type AdBudgetTierEnum = 'starter' | 'growth' | 'spotlight';
 
@@ -336,6 +338,20 @@ export type ContentReportRow = {
   resolved_by: string | null;
 };
 
+export type MessageAbuseFlagRow = {
+  id: string;
+  dm_message_id: string | null;
+  business_message_id: string | null;
+  thread_id: string;
+  sender_id: string;
+  reason: MessageFlagReasonEnum;
+  flagged_text: string;
+  status: MessageFlagStatusEnum;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+};
+
 export type ModerationActionRow = {
   id: string;
   actor_id: string | null;
@@ -556,6 +572,12 @@ export type Database = {
         Update: Partial<ModerationActionRow>;
         Relationships: [];
       };
+      message_abuse_flags: {
+        Row: MessageAbuseFlagRow;
+        Insert: Insertable<MessageAbuseFlagRow, 'id' | 'created_at' | 'resolved_at' | 'resolved_by'>;
+        Update: Partial<MessageAbuseFlagRow>;
+        Relationships: [];
+      };
       venue_events: {
         Row: VenueEventRow;
         Insert: Insertable<VenueEventRow, 'id' | 'created_at'>;
@@ -619,6 +641,8 @@ export type Database = {
       report_status: ReportStatusEnum;
       moderation_action_kind: ModerationActionKindEnum;
       venue_event_kind: VenueEventKindEnum;
+      message_flag_reason: MessageFlagReasonEnum;
+      message_flag_status: MessageFlagStatusEnum;
     };
     CompositeTypes: Record<string, never>;
   };

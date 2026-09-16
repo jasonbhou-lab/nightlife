@@ -3,14 +3,16 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import {
-  Body, Button, Callout, Card, Divider, gutter, Screen, ScreenHeader, styles as ui,
+  Body, Button, Callout, Card, Divider, gutter, SectionHeader, Screen, ScreenHeader, styles as ui,
 } from '@/components/ui';
 import { useCatalogue } from '@/data/catalogue';
-import { getModerationQueue, moderateReport, restoreReview } from '@/data/repository';
-import { relativeDate, REPORT_REASON_LABELS } from '@/lib/format';
+import {
+  getMessageAbuseFlags, getModerationQueue, moderateReport, resolveMessageAbuseFlag, restoreReview,
+} from '@/data/repository';
+import { MESSAGE_FLAG_REASON_LABELS, relativeDate, REPORT_REASON_LABELS } from '@/lib/format';
 import { useApp, useTheme } from '@/state/AppProvider';
 import { font, space } from '@/theme';
-import type { ContentReport } from '@/types';
+import type { ContentReport, MessageAbuseFlag } from '@/types';
 
 /**
  * F-TRUST-01, scoped to a single queue: reviews are the only content type
@@ -32,6 +34,7 @@ export default function ModerationScreen() {
   const { reviews, venueById, setReviewRecommended } = useCatalogue();
 
   const [reports, setReports] = useState<ContentReport[]>([]);
+  const [flags, setFlags] = useState<MessageAbuseFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +43,11 @@ export default function ModerationScreen() {
 
   const load = useCallback(() => {
     setLoading(true);
-    getModerationQueue()
-      .then(setReports)
+    Promise.all([getModerationQueue(), getMessageAbuseFlags()])
+      .then(([nextReports, nextFlags]) => {
+        setReports(nextReports);
+        setFlags(nextFlags);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -92,8 +98,22 @@ export default function ModerationScreen() {
     load();
   };
 
+  const resolveFlag = async (flag: MessageAbuseFlag, status: 'dismissed' | 'reviewed') => {
+    setBusyId(flag.id);
+    setError(null);
+    const result = await resolveMessageAbuseFlag({ flagId: flag.id, status });
+    setBusyId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    load();
+  };
+
   const open = reports.filter((r) => r.status === 'pending' || r.status === 'escalated');
   const resolved = reports.filter((r) => r.status === 'dismissed' || r.status === 'removed').slice(0, 20);
+  const pendingFlags = flags.filter((f) => f.status === 'pending');
+  const resolvedFlags = flags.filter((f) => f.status !== 'pending').slice(0, 20);
 
   return (
     <Screen contentStyle={{ gap: space.lg }}>
@@ -217,6 +237,83 @@ export default function ModerationScreen() {
                 </View>
               );
             })
+          )}
+        </Card>
+      </View>
+
+      {/*
+       * F-MSG-04: detect_message_abuse() flags these automatically — never
+       * a self-filed report, so there's no "reporter," and the flagged
+       * text shown here is the only message content this screen ever has
+       * access to (not the rest of either thread — see that trigger's own
+       * comment on why).
+       */}
+      <View style={gutter()}>
+        <SectionHeader title="Flagged messages" subtitle="Automatically detected, not self-reported" />
+        <Card padded={false}>
+          {pendingFlags.length === 0 ? (
+            <Body dim style={{ padding: space.lg }}>Nothing waiting on you.</Body>
+          ) : (
+            pendingFlags.map((flag, i) => (
+              <View key={flag.id}>
+                {i > 0 ? <Divider /> : null}
+                <View style={{ padding: space.lg }}>
+                  <Text style={[font.body, { color: theme.text }]}>{flag.senderName}</Text>
+                  <Text style={[font.small, { color: theme.textFaint, marginTop: 2 }]}>
+                    {MESSAGE_FLAG_REASON_LABELS[flag.reason]} · {flag.dmMessageId ? 'Direct message' : 'Venue message'}
+                    {' · '}
+                    {relativeDate(flag.createdAt, now)}
+                  </Text>
+                  <Body dim style={{ marginTop: space.sm }} numberOfLines={3}>
+                    &ldquo;{flag.flaggedText}&rdquo;
+                  </Body>
+                  <View style={[ui.row, { gap: space.sm, marginTop: space.md, flexWrap: 'wrap' }]}>
+                    <Button
+                      label="Dismiss"
+                      variant="secondary"
+                      loading={busyId === flag.id}
+                      onPress={() => resolveFlag(flag, 'dismissed')}
+                    />
+                    <Button
+                      label="Mark reviewed"
+                      variant="ghost"
+                      loading={busyId === flag.id}
+                      onPress={() => resolveFlag(flag, 'reviewed')}
+                    />
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
+      </View>
+
+      <View style={gutter()}>
+        <Text style={[font.cardTitle, { color: theme.onGround }]}>Recently resolved</Text>
+      </View>
+
+      <View style={gutter()}>
+        <Card padded={false}>
+          {resolvedFlags.length === 0 ? (
+            <Body dim style={{ padding: space.lg }}>Nothing resolved yet.</Body>
+          ) : (
+            resolvedFlags.map((flag, i) => (
+              <View key={flag.id}>
+                {i > 0 ? <Divider /> : null}
+                <View style={[ui.row, { padding: space.lg, gap: space.md }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[font.body, { color: theme.text }]}>{flag.senderName}</Text>
+                    <Text style={[font.small, { color: theme.textFaint, marginTop: 2 }]}>
+                      {MESSAGE_FLAG_REASON_LABELS[flag.reason]} ·{' '}
+                      {flag.resolvedAt ? relativeDate(flag.resolvedAt, now) : ''}
+                    </Text>
+                  </View>
+                  <Text style={[font.small, { color: theme.textDim }]}>
+                    {flag.status === 'reviewed' ? 'Reviewed' : 'Dismissed'}
+                  </Text>
+                </View>
+              </View>
+            ))
           )}
         </Card>
       </View>

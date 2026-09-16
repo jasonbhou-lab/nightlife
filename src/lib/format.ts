@@ -1,6 +1,8 @@
 import { attributeByKey } from '@/data/attributes';
 import { verticalMeta } from '@/data/taxonomy';
-import type { AttributeValue, BookingMode, Provenance, ReportReason, Venue, Vertical } from '@/types';
+import type {
+  AttributeValue, BookingMode, MessageFlagReason, Provenance, ReportReason, Venue, Vertical,
+} from '@/types';
 import { formatTime } from '@/lib/hours';
 
 /** Value rendering, provenance/staleness, and the category-adaptive action set. */
@@ -68,6 +70,12 @@ export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   harassment_or_hate_speech: 'Harassment or hate speech',
   privacy_violation: 'Privacy violation',
   irrelevant_or_promotional: 'Irrelevant or promotional',
+};
+
+/** F-MSG-04's automated detector — see detect_message_abuse()'s own comment for exactly what each catches and what it deliberately doesn't. */
+export const MESSAGE_FLAG_REASON_LABELS: Record<MessageFlagReason, string> = {
+  off_platform_payment: 'Off-platform payment solicitation',
+  threat_or_self_harm: 'Threat or self-harm language',
 };
 
 /* ------------------------------------------------------------ provenance */

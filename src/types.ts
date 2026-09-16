@@ -298,6 +298,30 @@ export type ContentReport = {
   resolvedAt?: string;
 };
 
+export type MessageFlagReason = 'off_platform_payment' | 'threat_or_self_harm';
+export type MessageFlagStatus = 'pending' | 'dismissed' | 'reviewed';
+
+/**
+ * F-MSG-04's automated detector, one row per flagged message. Exactly one
+ * of dmMessageId/businessMessageId is ever set — the row is self-contained
+ * (flaggedText is a copy taken at flag time), specifically so a moderator
+ * reading this queue never needs read access to dm_messages/messages
+ * themselves, which would mean reading the rest of a private DM thread.
+ */
+export type MessageAbuseFlag = {
+  id: string;
+  dmMessageId?: string;
+  businessMessageId?: string;
+  threadId: string;
+  senderId: string;
+  senderName: string;
+  reason: MessageFlagReason;
+  flaggedText: string;
+  status: MessageFlagStatus;
+  createdAt: string;
+  resolvedAt?: string;
+};
+
 export type ModerationActionKind =
   | 'report_dismissed' | 'report_escalated' | 'review_removed' | 'review_restored'
   | 'consumer_alert_applied' | 'consumer_alert_cleared'
