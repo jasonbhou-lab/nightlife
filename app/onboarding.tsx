@@ -116,6 +116,34 @@ export default function OnboardingScreen() {
       </View>
 
       <View style={gutter()}>
+        <SectionHeader
+          title="Sort your feed by"
+          subtitle="Star rating and Vibe (flames) are separate axes — a venue can rank high on one and low on the other"
+        />
+        <Card>
+          <View style={[ui.row, { gap: space.sm, flexWrap: 'wrap' }]}>
+            <Chip
+              label="Balanced"
+              selected={draft.feedSort === 'balanced'}
+              onPress={() => setDraft({ ...draft, feedSort: 'balanced' })}
+            />
+            <Chip
+              label="Vibe"
+              icon="flame"
+              selected={draft.feedSort === 'vibe'}
+              onPress={() => setDraft({ ...draft, feedSort: 'vibe' })}
+            />
+            <Chip
+              label="Star rating"
+              icon="star"
+              selected={draft.feedSort === 'rating'}
+              onPress={() => setDraft({ ...draft, feedSort: 'rating' })}
+            />
+          </View>
+        </Card>
+      </View>
+
+      <View style={gutter()}>
         <SectionHeader title="Typical party size" />
         <Card>
           <View style={[ui.row, { gap: space.sm, flexWrap: 'wrap' }]}>

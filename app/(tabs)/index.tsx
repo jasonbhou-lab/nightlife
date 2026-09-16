@@ -52,13 +52,25 @@ export default function HomeScreen() {
     [openNow],
   );
 
-  /** Personalization: stated preferences, then history, then distance. */
+  /**
+   * Personalization: stated preferences, then history, then distance. `feedSort`
+   * picks which rating axis leads — star rating and Vibe (flames) are distinct
+   * per-venue scores (see ratings.ts), so a "balanced" choice averages them
+   * rather than picking a winner.
+   */
+  const ratingFor = (v: Venue) => {
+    const sort = prefs.feedSort ?? 'balanced';
+    if (sort === 'vibe') return v.vibeRating;
+    if (sort === 'rating') return v.rating;
+    return (v.rating + v.vibeRating) / 2;
+  };
+
   const forYou = useMemo(() => {
     if (!prefs.personalized) {
-      return venues.filter((v) => !v.closure).slice().sort((a, b) => b.rating - a.rating).slice(0, 3);
+      return venues.filter((v) => !v.closure).slice().sort((a, b) => ratingFor(b) - ratingFor(a)).slice(0, 3);
     }
     const score = (v: Venue) => {
-      let s = v.rating * 10 - v.distanceMi * 1.5;
+      let s = ratingFor(v) * 10 - v.distanceMi * 1.5;
       if (prefs.cigarInterest && v.primary.vertical === 'cigar') s += 22;
       if (prefs.nightlifeInterest && (v.primary.vertical === 'nightclub' || v.primary.vertical === 'lounge')) s += 10;
       if (prefs.priceComfort.length && prefs.priceComfort.includes(v.priceTier)) s += 8;

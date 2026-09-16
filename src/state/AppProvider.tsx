@@ -83,6 +83,7 @@ const defaultPrefs: Preferences = {
   cigarInterest: false,
   typicalPartySize: 2,
   personalized: true,
+  feedSort: 'balanced',
   completedOnboarding: false,
 };
 

@@ -758,5 +758,7 @@ export type Preferences = {
   typicalPartySize: number;
   /** Personalization can be reset or adjusted by the user (F-SOCIAL-06). */
   personalized: boolean;
+  /** Which rating axis "For you" weights most heavily: star rating, vibe (flames), or both evenly. */
+  feedSort: 'balanced' | 'vibe' | 'rating';
   completedOnboarding: boolean;
 };
